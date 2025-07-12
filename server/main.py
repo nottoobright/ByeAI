@@ -3,12 +3,15 @@ import math
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
+from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 from pydantic import BaseModel
 import httpx
+
+load_dotenv()
 
 from . import models, database
 
