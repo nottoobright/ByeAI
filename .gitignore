@@ -1,0 +1,17 @@
+# Python server specific
+/server/venv/
+/server/__pycache__/
+/server/.env
+venv
+*.pyc
+
+# Node.js / Extension specific
+/node_modules/
+npm-debug.log
+yarn-error.log
+
+# IDE and OS files
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db

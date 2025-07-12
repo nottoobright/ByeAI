@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body{font-family:sans-serif;margin:16px;max-width:400px}
+    h2{margin-top:0}
+    .cat{margin:4px 0}
+    .btn{margin:8px 0;padding:6px 10px;border:none;border-radius:4px;cursor:pointer;background:#1976d2;color:#fff}
+  </style>
+</head>
+<body>
+  <h2>ByeAI Settings</h2>
+
+  <fieldset>
+    <legend>Block categories</legend>
+    <div id="cats"></div>
+  </fieldset>
+
+  <label style="display:flex;align-items:center;margin-top:12px">
+    <input type="checkbox" id="analytics">
+    <span style="margin-left:6px">Enable anonymous analytics</span>
+  </label>
+
+  <hr>
+
+  <button class="btn" id="export">Export blocked list</button>
+  <input type="file" id="importFile" accept=".json" style="display:none">
+  <button class="btn" id="import">Import blocked list</button>
+
+  <script src="options.js"></script>
+</body>
+</html>

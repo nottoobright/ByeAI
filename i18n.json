@@ -1,0 +1,25 @@
+{
+  "en": {
+    "flag_ai_button": "Flag AI",
+    "already_flagged": "Already Flagged",
+    "flag_this_video": "Flag this video",
+    "flag_picker_title": "Why is this AI-generated?",
+    "cancel": "Cancel",
+    "undo": "Undo",
+    "toast_hidden": "Video hidden.",
+    "toast_restored": "Video restored.",
+    "settings": "Settings",
+    "blocked_items": "Blocked items",
+    "clear_all": "Clear all",
+    "unhide": "Unhide",
+    "context_menu_title": "ByeAI: flag as AI-generated",
+    "categories": {
+      "AI-script": "AI-script",
+      "AI-image/thumbnail": "AI-image/thumbnail", 
+      "AI-music": "AI-music",
+      "AI-voice-over": "AI-voice-over",
+      "Deepfake/video": "Deepfake/video",
+      "Other": "Other"
+    }
+  }
+}
