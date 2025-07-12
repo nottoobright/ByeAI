@@ -15,3 +15,7 @@ yarn-error.log
 .idea/
 *.DS_Store
 Thumbs.db
+
+#Mics
+PID.txt
+.gitignore
