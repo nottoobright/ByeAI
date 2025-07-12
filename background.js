@@ -2,8 +2,8 @@ const idKey = 'clientHash';
 const blockedKey = 'blockedIds';
 const scopeKey = 'banCategories';
 const analyticsKey = 'analytics';
-// const api = 'https://api.byeai.org'; Use this in production
-const api = 'http://localhost:8000'
+const api = 'https://api.byeai.tech'; // Use this in production
+//const api = 'http://localhost:8000' // Use this for local testing
 const cats = [
   'AI-script','AI-image/thumbnail','AI-music',
   'AI-voice-over','Deepfake/video','Other'
@@ -45,7 +45,7 @@ function buildMenus() {
   });
 }
 
-async function sendVote(id, cat, viewCount = 0) {
+async function sendVote(id, cat, viewCount = 0, flagSource = 'unknown') {
   try {
     const { clientHash } = await chrome.storage.local.get(idKey);
     const { analytics } = await chrome.storage.local.get(analyticsKey);

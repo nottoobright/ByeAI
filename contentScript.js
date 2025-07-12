@@ -1,5 +1,5 @@
-// const api = 'https://api.byeai.org'; Use this in production
-const api = 'http://localhost:8000'
+const api = 'https://api.byeai.tech'; // Use this in production
+// const api = 'http://localhost:8000' //USe this for local testing
 const cats = [
   'AI-script', 'AI-image/thumbnail', 'AI-music',
   'AI-voice-over', 'Deepfake/video', 'Other'
