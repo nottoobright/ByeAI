@@ -1,4 +1,17 @@
+# Web framework
 fastapi==0.116.1
-httpx==0.28.1
-pydantic==2.11.7
+uvicorn==0.30.1
+
+# Production application server
+gunicorn==22.0.0
+
+# Database
 SQLAlchemy==2.0.41
+psycopg2-binary==2.9.9
+
+# HTTP client and environment management
+httpx==0.28.1
+python-dotenv==1.0.1
+
+# Pydantic for data validation
+pydantic==2.11.7
