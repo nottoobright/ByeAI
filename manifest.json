@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ByeAI — Hide AI‑generated YouTube videos",
   "description": "Crowdsourced filter that removes AI‑generated videos on YouTube.",
-  "version": "0.6.0",
+  "version": "1.0",
   "permissions": ["storage", "scripting", "contextMenus", "activeTab", "downloads"],
   "host_permissions": ["https://api.byeai.org/*"],
   "content_scripts": [

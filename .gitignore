@@ -5,6 +5,9 @@
 venv
 *.pyc
 
+#Landing Page
+/byeai-landing
+
 # Node.js / Extension specific
 /node_modules/
 npm-debug.log
