@@ -1,8 +1,13 @@
 const api = 'https://api.byeai.tech'; // Use this in production
 // const api = 'http://localhost:8000' //USe this for local testing
 const cats = [
-  'AI-script', 'AI-image/thumbnail', 'AI-music',
-  'AI-voice-over', 'Deepfake/video', 'Other'
+  { id: 'ai-general', label: 'AI-General' },
+  { id: 'ai-script', label: 'AI-Script' },
+  { id: 'ai-thumbnail', label: 'AI-Thumbnail' },
+  { id: 'ai-music', label: 'AI-Music' },
+  { id: 'ai-voice', label: 'AI-Voice' },
+  { id: 'deepfake', label: 'Deepfake' },
+  { id: 'other', label: 'Other' }
 ];
 const blockedKey = 'blockedIds';
 const scopeKey = 'banCategories';
@@ -240,13 +245,13 @@ function showPicker(id) {
   box.appendChild(header);
   
   cats.forEach(c=>{
-    const row=document.createElement('div');row.textContent=c;
+    const row=document.createElement('div');row.textContent=c.label;
     Object.assign(row.style,{padding:'12px 16px',cursor:'pointer',fontSize:'14px'});
     row.onmouseenter=()=>row.style.background='#f5f5f5';
     row.onmouseleave=()=>row.style.background='#fff';
     row.onclick=()=>{
       const viewCount = extractViewCount();
-      chrome.runtime.sendMessage({type:'flag',id,cat:c,viewCount, flagSource: 'inline_button'});
+      chrome.runtime.sendMessage({type:'flag',id,cat:c.id,viewCount, flagSource: 'inline_button'});
       box.remove();
     };
     box.appendChild(row);
@@ -324,7 +329,7 @@ chrome.runtime.onMessage.addListener(m => {
 });
 
 chrome.storage.local.get([blockedKey, scopeKey]).then(store => {
-  banCategories = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c]: true }), {});
+  banCategories = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
   (store[blockedKey] || []).forEach(id => known.set(id, { flagged: true, category: 'local' }));
   initialize();
 });

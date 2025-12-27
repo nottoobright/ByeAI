@@ -3,26 +3,234 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body{font-family:sans-serif;margin:0;padding:8px;min-width:220px}
-    button{display:block;width:100%;margin:4px 0;padding:6px;border:none;border-radius:4px;cursor:pointer}
-    #list button{width:auto;background:#e84545;color:#fff}
-    #list div{display:flex;justify-content:space-between;align-items:center;padding:4px 0}
-    #clearAll{background:#555;color:#fff}
+    * {
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      margin: 0;
+      padding: 12px;
+      min-width: 280px;
+      background: #fafafa;
+      color: #1a1a1a;
+    }
+    
+    h3 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    h3::before {
+      content: '🚩';
+      font-size: 16px;
+    }
+    
+    /* Checkbox Categories */
+    .category-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    
+    .category-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    
+    .category-item:hover {
+      border-color: #c0c0c0;
+      background: #f8f8f8;
+    }
+    
+    .category-item.selected {
+      border-color: #dc3545;
+      background: #fff5f5;
+    }
+    
+    .category-item input[type="checkbox"] {
+      margin: 0 10px 0 0;
+      width: 16px;
+      height: 16px;
+      accent-color: #dc3545;
+      cursor: pointer;
+    }
+    
+    .category-item label {
+      flex: 1;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    /* Submit Button */
+    #submitFlag {
+      width: 100%;
+      padding: 12px;
+      background: #dc3545;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-bottom: 8px;
+    }
+    
+    #submitFlag:hover:not(:disabled) {
+      background: #c82333;
+      transform: translateY(-1px);
+    }
+    
+    #submitFlag:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    /* Settings Button */
+    #settings {
+      width: 100%;
+      padding: 10px;
+      background: #fff;
+      color: #666;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin: 8px 0;
+    }
+    
+    #settings:hover {
+      background: #f5f5f5;
+      border-color: #ccc;
+    }
+    
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: #e0e0e0;
+      margin: 12px 0;
+    }
+    
+    /* Blocked List */
+    #listUI h3::before {
+      content: '🚫';
+    }
+    
+    #list {
+      max-height: 150px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+    
+    .blocked-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    
+    .blocked-item span {
+      font-size: 11px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      color: #666;
+      word-break: break-all;
+    }
+    
+    .blocked-item button {
+      padding: 4px 10px;
+      background: #f0f0f0;
+      color: #666;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+      margin-left: 8px;
+    }
+    
+    .blocked-item button:hover {
+      background: #e0e0e0;
+      color: #333;
+    }
+    
+    #clearAll {
+      width: 100%;
+      padding: 8px;
+      background: #fff;
+      color: #888;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    
+    #clearAll:hover {
+      background: #f5f5f5;
+      color: #666;
+    }
+    
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 16px;
+      color: #999;
+      font-size: 12px;
+    }
+    
+    /* Focus States */
+    button:focus, input:focus {
+      outline: 2px solid #dc3545;
+      outline-offset: 2px;
+    }
+    
+    /* Selection Counter */
+    .selection-hint {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
   <div id="flagUI" hidden>
-    <h3 style="margin:0 0 6px">Flag this video</h3>
-    <div id="cats"></div>
+    <h3>Flag this video</h3>
+    <div id="cats" class="category-list"></div>
+    <div id="selectionHint" class="selection-hint">Select one or more categories</div>
+    <button id="submitFlag" disabled>Submit Flag</button>
   </div>
-  <button id="settings" style="background:#888;color:#fff;width:100%;margin-top:8px">
-    ⚙ Settings
-  </button>
+  
+  <button id="settings">⚙️ Settings</button>
+  
+  <div class="divider"></div>
+  
   <div id="listUI">
-    <h3 style="margin:0 0 6px">Blocked items</h3>
+    <h3>Blocked items</h3>
     <div id="list"></div>
     <button id="clearAll">Clear all</button>
   </div>
+  
   <script src="popup.js"></script>
 </body>
 </html>

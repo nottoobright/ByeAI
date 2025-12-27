@@ -5,8 +5,13 @@ const analyticsKey = 'analytics';
 const api = 'https://api.byeai.tech'; // Use this in production
 //const api = 'http://localhost:8000' // Use this for local testing
 const cats = [
-  'AI-script','AI-image/thumbnail','AI-music',
-  'AI-voice-over','Deepfake/video','Other'
+  { id: 'ai-general', label: 'AI-General' },
+  { id: 'ai-script', label: 'AI-Script' },
+  { id: 'ai-thumbnail', label: 'AI-Thumbnail' },
+  { id: 'ai-music', label: 'AI-Music' },
+  { id: 'ai-voice', label: 'AI-Voice' },
+  { id: 'deepfake', label: 'Deepfake' },
+  { id: 'other', label: 'Other' }
 ];
 
 const getVid = url => {
@@ -24,7 +29,7 @@ async function ensureId() {
 async function ensureDefaults() {
   const store = await chrome.storage.local.get([scopeKey, analyticsKey]);
   const updates = {};
-  if (!store[scopeKey]) updates[scopeKey] = cats.reduce((o, c) => ({ ...o, [c]: true }), {});
+  if (!store[scopeKey]) updates[scopeKey] = cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
   if (store[analyticsKey] === undefined) updates[analyticsKey] = false;
   if (Object.keys(updates).length > 0) await chrome.storage.local.set(updates);
 }
@@ -37,9 +42,9 @@ function buildMenus() {
       contexts: ['link', 'image', 'video']
     });
     cats.forEach(c => chrome.contextMenus.create({
-      id: `cat_${c}`,
+      id: `cat_${c.id}`,
       parentId: 'byeai_root',
-      title: c,
+      title: c.label,
       contexts: ['link', 'image', 'video']
     }));
   });
@@ -147,6 +152,15 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const serverResponse = await sendVote(msg.id, msg.cat, msg.viewCount, msg.flagSource);
       await storeBlock(msg.id);
       broadcast({ type: 'videoFlagged', id: msg.id, category: msg.cat, showUndo: true, serverResponse }, sender.tab?.id);
+      break;
+    case 'flagMultiple':
+      // Handle multi-category flagging - send one vote per category
+      const categories = msg.categories || [];
+      for (const cat of categories) {
+        await sendVote(msg.id, cat, msg.viewCount || 0, 'popup');
+      }
+      await storeBlock(msg.id);
+      broadcast({ type: 'videoFlagged', id: msg.id, categories: categories, showUndo: true }, msg.tabId);
       break;
     case 'unblock':
       await removeBlock(msg.id);

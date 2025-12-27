@@ -1,4 +1,12 @@
-const cats = ['AI-script','AI-image/thumbnail','AI-music','AI-voice-over','Deepfake/video','Other'];
+const cats = [
+  { id: 'ai-general', label: 'AI-General' },
+  { id: 'ai-script', label: 'AI-Script' },
+  { id: 'ai-thumbnail', label: 'AI-Image/Thumbnail' },
+  { id: 'ai-music', label: 'AI-Music' },
+  { id: 'ai-voice', label: 'AI-Voice-over' },
+  { id: 'deepfake', label: 'Deepfake/Video' },
+  { id: 'other', label: 'Other' }
+];
 const scopeKey = 'banCategories';
 const analyticsKey = 'analytics';
 const blockedKey = 'blockedIds';
@@ -19,7 +27,7 @@ importBtn.textContent = 'Import blocked list';
 
 async function load() {
   const store = await chrome.storage.local.get([scopeKey, analyticsKey]);
-  const active = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c]: true }), {});
+  const active = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
   
   catsDiv.innerHTML = '';
   
@@ -33,14 +41,14 @@ async function load() {
     
     const cb = document.createElement('input');
     cb.type = 'checkbox';
-    cb.checked = !!active[c];
+    cb.checked = !!active[c.id];
     cb.style.marginRight = '8px';
-    cb.setAttribute('aria-labelledby', `cat-${c}`);
-    cb.onchange = () => saveCat(c, cb.checked);
+    cb.setAttribute('aria-labelledby', `cat-${c.id}`);
+    cb.onchange = () => saveCat(c.id, cb.checked);
     
     const span = document.createElement('span');
-    span.id = `cat-${c}`;
-    span.textContent = c;
+    span.id = `cat-${c.id}`;
+    span.textContent = c.label;
     span.style.fontSize = '14px';
     
     // Keyboard support for label
@@ -48,7 +56,7 @@ async function load() {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         cb.checked = !cb.checked;
-        saveCat(c, cb.checked);
+        saveCat(c.id, cb.checked);
       }
     };
     
@@ -90,11 +98,10 @@ function addCategoryControls() {
 
 function toggleAllCategories(enabled) {
   const checkboxes = catsDiv.querySelectorAll('input[type="checkbox"]');
-  checkboxes.forEach(cb => {
-    if (cb !== analyticsBox) {
+  checkboxes.forEach((cb, idx) => {
+    if (cb !== analyticsBox && cats[idx]) {
       cb.checked = enabled;
-      const cat = cats[Array.from(checkboxes).indexOf(cb)];
-      if (cat) saveCat(cat, enabled);
+      saveCat(cats[idx].id, enabled);
     }
   });
 }

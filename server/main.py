@@ -46,8 +46,16 @@ app.add_middleware(
 VIDEO_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{11}$')
 # Valid UUID pattern for clientHash
 UUID_PATTERN = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', re.IGNORECASE)
-# Valid categories
-VALID_CATEGORIES = ['AI-script', 'AI-image/thumbnail', 'AI-music', 'AI-voice-over', 'Deepfake/video', 'Other']
+# Valid categories (lowercase, kebab-case for consistency)
+VALID_CATEGORIES = [
+    'ai-general',      # AI used throughout / unsure
+    'ai-script',       # AI-written script/content
+    'ai-thumbnail',    # AI-generated images/thumbnails
+    'ai-music',        # AI-generated music/audio
+    'ai-voice',        # AI voice-over / synthetic voice
+    'deepfake',        # Deepfake / AI-manipulated video
+    'other'            # Other AI usage
+]
 VALID_FLAG_SOURCES = ['inline_button', 'context_menu', 'popup', 'thumbnail', 'unknown']
 
 class VoteRequest(BaseModel):
