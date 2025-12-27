@@ -233,38 +233,146 @@ function injectInlineButton() {
 }
 
 function showPicker(id) {
+  const selectedCategories = new Set();
+  
+  const overlay = document.createElement('div');
+  Object.assign(overlay.style, {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.5)', zIndex: 99998
+  });
+  overlay.onclick = () => { overlay.remove(); box.remove(); };
+  document.body.appendChild(overlay);
+  
   const box = document.createElement('div');
-  Object.assign(box.style, {position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',
-    background:'#fff',border:'1px solid #ccc',boxShadow:'0 2px 8px rgba(0,0,0,.2)',zIndex:99999,
-    borderRadius:'8px',minWidth:'200px'});
-  
-  const header = document.createElement('div');
-  header.textContent = 'Why is this AI-generated?';
-  Object.assign(header.style, {padding:'12px 16px',borderBottom:'1px solid #eee',
-    fontWeight:'bold',fontSize:'14px'});
-  box.appendChild(header);
-  
-  cats.forEach(c=>{
-    const row=document.createElement('div');row.textContent=c.label;
-    Object.assign(row.style,{padding:'12px 16px',cursor:'pointer',fontSize:'14px'});
-    row.onmouseenter=()=>row.style.background='#f5f5f5';
-    row.onmouseleave=()=>row.style.background='#fff';
-    row.onclick=()=>{
-      const viewCount = extractViewCount();
-      chrome.runtime.sendMessage({type:'flag',id,cat:c.id,viewCount, flagSource: 'inline_button'});
-      box.remove();
-    };
-    box.appendChild(row);
+  Object.assign(box.style, {
+    position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+    background: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,.2)', zIndex: 99999,
+    borderRadius: '12px', minWidth: '280px', maxWidth: '320px', overflow: 'hidden'
   });
   
-  const cancel = document.createElement('div');
-  cancel.textContent = 'Cancel';
-  Object.assign(cancel.style, {padding:'12px 16px',cursor:'pointer',fontSize:'14px',
-    borderTop:'1px solid #eee',color:'#666',textAlign:'center'});
-  cancel.onmouseenter=()=>cancel.style.background='#f5f5f5';
-  cancel.onmouseleave=()=>cancel.style.background='#fff';
-  cancel.onclick=()=>box.remove();
-  box.appendChild(cancel);
+  const header = document.createElement('div');
+  header.textContent = '🚩 Flag this video';
+  Object.assign(header.style, {
+    padding: '16px 20px', borderBottom: '1px solid #eee',
+    fontWeight: '600', fontSize: '16px', background: '#fafafa'
+  });
+  box.appendChild(header);
+  
+  const catContainer = document.createElement('div');
+  Object.assign(catContainer.style, { padding: '8px 12px' });
+  
+  cats.forEach(c => {
+    const row = document.createElement('label');
+    Object.assign(row.style, {
+      display: 'flex', alignItems: 'center', padding: '10px 12px',
+      cursor: 'pointer', fontSize: '14px', borderRadius: '8px',
+      margin: '4px 0', border: '1px solid #e0e0e0', background: '#fff',
+      transition: 'all 0.15s ease'
+    });
+    
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = c.id;
+    Object.assign(checkbox.style, {
+      marginRight: '10px', width: '16px', height: '16px',
+      accentColor: '#dc3545', cursor: 'pointer'
+    });
+    
+    checkbox.onchange = () => {
+      if (checkbox.checked) {
+        selectedCategories.add(c.id);
+        row.style.borderColor = '#dc3545';
+        row.style.background = '#fff5f5';
+      } else {
+        selectedCategories.delete(c.id);
+        row.style.borderColor = '#e0e0e0';
+        row.style.background = '#fff';
+      }
+      updateSubmitBtn();
+    };
+    
+    const label = document.createElement('span');
+    label.textContent = c.label;
+    
+    row.appendChild(checkbox);
+    row.appendChild(label);
+    row.onmouseenter = () => { if (!checkbox.checked) row.style.background = '#f8f8f8'; };
+    row.onmouseleave = () => { if (!checkbox.checked) row.style.background = '#fff'; };
+    catContainer.appendChild(row);
+  });
+  
+  box.appendChild(catContainer);
+  
+  const hint = document.createElement('div');
+  hint.textContent = 'Select one or more categories';
+  Object.assign(hint.style, {
+    padding: '8px 20px', fontSize: '12px', color: '#888', textAlign: 'center'
+  });
+  box.appendChild(hint);
+  
+  const btnContainer = document.createElement('div');
+  Object.assign(btnContainer.style, {
+    padding: '12px 16px', borderTop: '1px solid #eee',
+    display: 'flex', gap: '8px'
+  });
+  
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  Object.assign(cancelBtn.style, {
+    flex: 1, padding: '10px', border: '1px solid #ddd', borderRadius: '8px',
+    background: '#fff', color: '#666', fontSize: '14px', cursor: 'pointer'
+  });
+  cancelBtn.onmouseenter = () => cancelBtn.style.background = '#f5f5f5';
+  cancelBtn.onmouseleave = () => cancelBtn.style.background = '#fff';
+  cancelBtn.onclick = () => { overlay.remove(); box.remove(); };
+  
+  const submitBtn = document.createElement('button');
+  submitBtn.textContent = 'Submit Flag';
+  submitBtn.disabled = true;
+  Object.assign(submitBtn.style, {
+    flex: 1, padding: '10px', border: 'none', borderRadius: '8px',
+    background: '#ccc', color: '#fff', fontSize: '14px', fontWeight: '600',
+    cursor: 'not-allowed', transition: 'all 0.15s ease'
+  });
+  
+  const updateSubmitBtn = () => {
+    const count = selectedCategories.size;
+    if (count === 0) {
+      submitBtn.disabled = true;
+      submitBtn.style.background = '#ccc';
+      submitBtn.style.cursor = 'not-allowed';
+      submitBtn.textContent = 'Submit Flag';
+      hint.textContent = 'Select one or more categories';
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.style.background = '#dc3545';
+      submitBtn.style.cursor = 'pointer';
+      submitBtn.textContent = count === 1 ? 'Submit Flag' : `Submit ${count} Flags`;
+      hint.textContent = `${count} categor${count === 1 ? 'y' : 'ies'} selected`;
+    }
+  };
+  
+  submitBtn.onclick = () => {
+    if (selectedCategories.size === 0) return;
+    const viewCount = extractViewCount();
+    const categories = Array.from(selectedCategories);
+    chrome.runtime.sendMessage({
+      type: 'flagMultiple',
+      id,
+      categories,
+      viewCount,
+      flagSource: 'inline_button'
+    });
+    overlay.remove();
+    box.remove();
+  };
+  
+  submitBtn.onmouseenter = () => { if (!submitBtn.disabled) submitBtn.style.background = '#c82333'; };
+  submitBtn.onmouseleave = () => { if (!submitBtn.disabled) submitBtn.style.background = '#dc3545'; };
+  
+  btnContainer.appendChild(cancelBtn);
+  btnContainer.appendChild(submitBtn);
+  box.appendChild(btnContainer);
   
   document.body.appendChild(box);
 }

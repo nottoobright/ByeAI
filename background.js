@@ -156,11 +156,14 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
     case 'flagMultiple':
       // Handle multi-category flagging - send one vote per category
       const categories = msg.categories || [];
+      const flagSource = msg.flagSource || 'popup';
       for (const cat of categories) {
-        await sendVote(msg.id, cat, msg.viewCount || 0, 'popup');
+        await sendVote(msg.id, cat, msg.viewCount || 0, flagSource);
       }
       await storeBlock(msg.id);
-      broadcast({ type: 'videoFlagged', id: msg.id, categories: categories, showUndo: true }, msg.tabId);
+      // Use sender.tab?.id for inline button, or msg.tabId for popup
+      const targetTabId = sender.tab?.id || msg.tabId;
+      broadcast({ type: 'videoFlagged', id: msg.id, categories: categories, showUndo: true }, targetTabId);
       break;
     case 'unblock':
       await removeBlock(msg.id);
