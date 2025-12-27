@@ -25,3 +25,10 @@ overview_arch.txt
 .github
 .gitignore
 *.zip
+
+# Private/sensitive documents - NEVER COMMIT
+ORACLE_MIGRATION_PRIVATE.md
+AUDIT_AND_STRATEGY.md
+DEPLOY_NOW.md
+*_PRIVATE.md
+*.private.*

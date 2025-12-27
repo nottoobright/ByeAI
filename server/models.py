@@ -25,9 +25,9 @@ class Video(Base):
 class Vote(Base):
     __tablename__ = "votes"
     id = Column(Integer, primary_key=True, index=True)
-    user_hash = Column(String, ForeignKey("users.client_hash"))
-    video_id = Column(String, ForeignKey("videos.video_id"))
-    category = Column(String, nullable=False)
+    user_hash = Column(String, ForeignKey("users.client_hash"), index=True)  # Added index
+    video_id = Column(String, ForeignKey("videos.video_id"), index=True)  # Added index
+    category = Column(String, nullable=False, index=True)  # Added index for category aggregations
     timestamp = Column(BigInteger, nullable=False)
     
     user = relationship("User", back_populates="votes")

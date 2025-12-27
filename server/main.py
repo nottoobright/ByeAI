@@ -1,15 +1,18 @@
 import os
+import re
 import math
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from contextlib import contextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import httpx
+from collections import defaultdict
 
 load_dotenv()
 
@@ -22,13 +25,29 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="ByeAI API", version="1.0.0")
 
+# Allowed origins for CORS - Chrome extensions and YouTube
+ALLOWED_ORIGINS = [
+    "chrome-extension://*",
+    "https://www.youtube.com",
+    "https://youtube.com",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^chrome-extension://.*$",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
+
+# Valid YouTube video ID pattern (11 characters, alphanumeric + dash/underscore)
+VIDEO_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{11}$')
+# Valid UUID pattern for clientHash
+UUID_PATTERN = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', re.IGNORECASE)
+# Valid categories
+VALID_CATEGORIES = ['AI-script', 'AI-image/thumbnail', 'AI-music', 'AI-voice-over', 'Deepfake/video', 'Other']
+VALID_FLAG_SOURCES = ['inline_button', 'context_menu', 'popup', 'thumbnail', 'unknown']
 
 class VoteRequest(BaseModel):
     videoId: str
@@ -38,6 +57,34 @@ class VoteRequest(BaseModel):
     viewCount: int = 0
     flagSource: str = "unknown"
     analytics: Optional[dict] = None
+    
+    @field_validator('videoId')
+    @classmethod
+    def validate_video_id(cls, v):
+        if not VIDEO_ID_PATTERN.match(v):
+            raise ValueError('Invalid YouTube video ID format')
+        return v
+    
+    @field_validator('clientHash')
+    @classmethod
+    def validate_client_hash(cls, v):
+        if not UUID_PATTERN.match(v):
+            raise ValueError('Invalid client hash format')
+        return v
+    
+    @field_validator('category')
+    @classmethod
+    def validate_category(cls, v):
+        if v not in VALID_CATEGORIES:
+            raise ValueError(f'Invalid category. Must be one of: {VALID_CATEGORIES}')
+        return v
+    
+    @field_validator('flagSource')
+    @classmethod
+    def validate_flag_source(cls, v):
+        if v not in VALID_FLAG_SOURCES:
+            return 'unknown'
+        return v
 
 class FlagsResponse(BaseModel):
     videos: List[dict]
@@ -51,9 +98,18 @@ class YouTubeService:
         self.daily_requests = 0
         self.last_reset = datetime.now()
         self.max_daily_requests = 9000
+        # Circuit breaker for quota management
+        self.circuit_breaker_until = None
+        self.consecutive_failures = 0
+        self.max_failures = 5
     
     def can_make_request(self) -> bool:
         self._reset_daily_counter()
+        
+        # Check circuit breaker
+        if self.circuit_breaker_until and datetime.now() < self.circuit_breaker_until:
+            return False
+            
         return self.daily_requests < self.max_daily_requests
     
     def record_request(self):
@@ -90,6 +146,8 @@ class YouTubeService:
                 self.record_request()
                 
                 if response.status_code == 200:
+                    # Reset circuit breaker on successful request
+                    self._reset_circuit_breaker()
                     data = response.json()
                     if data.get("items"):
                         stats = data["items"][0]["statistics"]
@@ -98,14 +156,33 @@ class YouTubeService:
                     return 0
                 elif response.status_code == 403:
                     logger.error("YouTube API quota exceeded")
+                    self._handle_api_failure()
                     return 100000
                 else:
                     logger.error(f"YouTube API error: {response.status_code}")
+                    self._handle_api_failure()
                     return 100000
                     
         except Exception as e:
             logger.error(f"Error fetching video statistics: {str(e)}")
+            self._handle_api_failure()
             return 100000
+    
+    def _handle_api_failure(self):
+        """Handle API failures and implement circuit breaker"""
+        self.consecutive_failures += 1
+        if self.consecutive_failures >= self.max_failures:
+            # Open circuit breaker for 1 hour
+            from datetime import timedelta
+            self.circuit_breaker_until = datetime.now() + timedelta(hours=1)
+            logger.warning(f"Circuit breaker opened due to {self.consecutive_failures} consecutive failures")
+    
+    def _reset_circuit_breaker(self):
+        """Reset circuit breaker on successful request"""
+        if self.consecutive_failures > 0:
+            self.consecutive_failures = 0
+            self.circuit_breaker_until = None
+            logger.info("Circuit breaker reset after successful request")
 
 youtube_service = YouTubeService()
 
@@ -115,42 +192,53 @@ def get_user_reputation_score(rep_points: int) -> float:
 def calculate_threshold(view_count: int) -> int:
     return max(15, math.ceil(0.05 * math.sqrt(view_count)))
 
-def update_user_reputations(video_id: str, db: Session) -> None:
-    video = db.query(models.Video).filter(models.Video.video_id == video_id).first()
-    if not video:
-        return
+def update_user_reputations_safe(video_id: str) -> None:
+    """Background-safe version that creates its own database session.
     
-    threshold = calculate_threshold(video.view_count)
-    votes = db.query(models.Vote).filter(models.Vote.video_id == video_id).all()
+    This function is called as a background task after a vote is submitted.
+    It must create its own session because the request session is closed
+    by the time background tasks run.
+    """
+    from .database import get_background_db
     
-    video_flagged = video.score >= threshold
-    
-    for vote in votes:
-        user = db.query(models.User).filter(models.User.client_hash == vote.user_hash).first()
-        if not user:
-            continue
-            
-        old_reputation = user.reputation_points
+    with get_background_db() as db:
+        video = db.query(models.Video).filter(models.Video.video_id == video_id).first()
+        if not video:
+            logger.warning(f"Video {video_id} not found for reputation update")
+            return
         
-        if video_flagged:
-            user.reputation_points += 1
-        else:
-            if video.score < -2:
-                user.reputation_points -= 1
+        threshold = calculate_threshold(video.view_count)
+        votes = db.query(models.Vote).filter(models.Vote.video_id == video_id).all()
+        
+        video_flagged = video.score >= threshold
+        
+        for vote in votes:
+            user = db.query(models.User).filter(models.User.client_hash == vote.user_hash).first()
+            if not user:
+                continue
                 
-        user.reputation_points = max(1, user.reputation_points)
+            old_reputation = user.reputation_points
+            
+            if video_flagged:
+                user.reputation_points += 1
+            else:
+                if video.score < -2:
+                    user.reputation_points -= 1
+                    
+            user.reputation_points = max(1, user.reputation_points)
+            
+            if user.reputation_points != old_reputation:
+                db.add(models.ReputationLog(
+                    user_hash=user.client_hash,
+                    old_reputation=old_reputation,
+                    new_reputation=user.reputation_points,
+                    reason=f"Consensus update for video {video_id}",
+                    timestamp=int(datetime.now().timestamp())
+                ))
         
-        if user.reputation_points != old_reputation:
-            db.add(models.ReputationLog(
-                user_hash=user.client_hash,
-                old_reputation=old_reputation,
-                new_reputation=user.reputation_points,
-                reason=f"Consensus update for video {video_id}",
-                timestamp=int(datetime.now().timestamp())
-            ))
-    
-    db.commit()
-    
+        # Commit happens automatically via context manager
+        logger.info(f"Reputation update completed for video {video_id}")
+
 async def track_plausible_event(payload: dict, request: Request):
     plausible_domain = os.getenv("PLAUSIBLE_DOMAIN")
     if not plausible_domain:
@@ -245,7 +333,8 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
     
     db.commit()
     
-    background_tasks.add_task(update_user_reputations, video.video_id, db)
+    # Use background-safe version that creates its own session
+    background_tasks.add_task(update_user_reputations_safe, video.video_id)
     
     return {
         "status": "success",
@@ -258,10 +347,34 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
 
 @app.get("/flags", response_model=FlagsResponse)
 def get_flags(ids: str, db: Session = Depends(database.get_db)):
-    video_ids = ids.split(',')
+    """Get flagged status for a list of video IDs.
+    
+    Args:
+        ids: Comma-separated list of YouTube video IDs (max 100)
+    """
+    # Input validation
+    if not ids or not ids.strip():
+        return {"videos": []}
+    
+    video_ids = [vid.strip() for vid in ids.split(',') if vid.strip()]
+    
+    # Limit to prevent DoS
+    MAX_IDS = 100
+    if len(video_ids) > MAX_IDS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Maximum {MAX_IDS} video IDs allowed per request"
+        )
+    
+    # Validate each video ID format
+    valid_ids = [vid for vid in video_ids if VIDEO_ID_PATTERN.match(vid)]
+    
+    if not valid_ids:
+        return {"videos": []}
+    
     flagged_videos = []
     
-    videos = db.query(models.Video).filter(models.Video.video_id.in_(video_ids)).all()
+    videos = db.query(models.Video).filter(models.Video.video_id.in_(valid_ids)).all()
     
     for video in videos:
         threshold = calculate_threshold(video.view_count)
@@ -287,6 +400,10 @@ def get_flags(ids: str, db: Session = Depends(database.get_db)):
 
 @app.get("/video/{video_id}/stats")
 def get_video_stats(video_id: str, db: Session = Depends(database.get_db)):
+    # Validate video ID format
+    if not VIDEO_ID_PATTERN.match(video_id):
+        raise HTTPException(status_code=400, detail="Invalid video ID format")
+    
     video = db.query(models.Video).filter(models.Video.video_id == video_id).first()
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -315,4 +432,13 @@ async def get_quota_status():
         "requests_used": youtube_service.daily_requests,
         "requests_remaining": youtube_service.max_daily_requests - youtube_service.daily_requests,
         "quota_percentage": (youtube_service.daily_requests / youtube_service.max_daily_requests) * 100
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring and load balancers."""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "timestamp": datetime.now().isoformat()
     }
