@@ -318,7 +318,7 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
             video.view_count = view_count
 
     # Check if user already voted for this specific category on this video
-    existing_vote = db.query(models.Vote).filter(
+    existing_category_vote = db.query(models.Vote).filter(
         and_(
             models.Vote.user_hash == user.client_hash,
             models.Vote.video_id == video.video_id,
@@ -326,8 +326,16 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
         )
     ).first()
 
-    if existing_vote:
+    if existing_category_vote:
         raise HTTPException(status_code=409, detail="User has already voted for this category on this video")
+
+    # Check if this is the user's first vote on this video (for scoring)
+    is_first_vote_on_video = not db.query(models.Vote).filter(
+        and_(
+            models.Vote.user_hash == user.client_hash,
+            models.Vote.video_id == video.video_id
+        )
+    ).first()
 
     new_vote = models.Vote(
         user_hash=user.client_hash,
@@ -337,8 +345,11 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
     )
     db.add(new_vote)
     
-    user_reputation_weight = get_user_reputation_score(user.reputation_points)
-    video.score += user_reputation_weight
+    # Only add to score on first vote per user per video
+    # Additional category votes don't increase the score
+    if is_first_vote_on_video:
+        user_reputation_weight = get_user_reputation_score(user.reputation_points)
+        video.score += user_reputation_weight
     
     threshold = calculate_threshold(video.view_count)
     
