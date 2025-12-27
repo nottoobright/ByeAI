@@ -16,7 +16,8 @@ from collections import defaultdict
 
 load_dotenv()
 
-from . import models, database
+import models
+import database
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -199,7 +200,7 @@ def update_user_reputations_safe(video_id: str) -> None:
     It must create its own session because the request session is closed
     by the time background tasks run.
     """
-    from .database import get_background_db
+    from database import get_background_db
     
     with get_background_db() as db:
         video = db.query(models.Video).filter(models.Video.video_id == video_id).first()
