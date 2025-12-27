@@ -317,15 +317,17 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
         if view_count > video.view_count:
             video.view_count = view_count
 
+    # Check if user already voted for this specific category on this video
     existing_vote = db.query(models.Vote).filter(
         and_(
             models.Vote.user_hash == user.client_hash,
-            models.Vote.video_id == video.video_id
+            models.Vote.video_id == video.video_id,
+            models.Vote.category == vote_req.category
         )
     ).first()
 
     if existing_vote:
-        raise HTTPException(status_code=409, detail="User has already voted on this video")
+        raise HTTPException(status_code=409, detail="User has already voted for this category on this video")
 
     new_vote = models.Vote(
         user_hash=user.client_hash,
