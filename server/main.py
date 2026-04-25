@@ -13,6 +13,9 @@ from sqlalchemy import and_, func
 from pydantic import BaseModel, field_validator
 import httpx
 from collections import defaultdict
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
@@ -24,7 +27,27 @@ logger = logging.getLogger(__name__)
 
 models.Base.metadata.create_all(bind=database.engine)
 
+def _rate_limit_key(request: Request) -> str:
+    """Default rate-limit key: caller IP. Per-clientHash limiting on /vote
+    is handled separately inside the handler (since it needs the parsed body)."""
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_rate_limit_key, headers_enabled=False)
+
+def _custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    """Custom handler that adds Retry-After header to 429 responses."""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded"},
+        headers={"Retry-After": "60"}
+    )
+
 app = FastAPI(title="ByeAI API", version="1.0.0")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _custom_rate_limit_handler)
 
 # Allowed origins for CORS - Chrome extensions and YouTube
 ALLOWED_ORIGINS = [
@@ -277,12 +300,28 @@ async def track_plausible_event(payload: dict, request: Request):
         logger.error(f"Failed to send event to Plausible: {e}")
 
 @app.post("/vote")
+@limiter.limit("30/minute")
 async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Depends(database.get_db), 
                      background_tasks: BackgroundTasks = BackgroundTasks()):
     
         # Track event if analytics are enabled
     if vote_req.analytics:
         background_tasks.add_task(track_plausible_event, vote_req.analytics, request)
+    
+    # Per-clientHash rate limit (15/minute), enforced manually because
+    # we need the parsed body to know clientHash.
+    try:
+        from limits import parse
+        from limits.strategies import FixedWindowRateLimiter
+        # Reuse the limiter's storage so limits persist across requests.
+        rate_limit_strategy = FixedWindowRateLimiter(limiter._storage)
+        per_hash_limit = parse("15/minute")
+        if not rate_limit_strategy.hit(per_hash_limit, "vote_per_hash", vote_req.clientHash):
+            raise HTTPException(status_code=429, detail="Too many votes from this client; please slow down.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning(f"Per-hash rate-limit check failed gracefully: {exc}")
         
     user = db.query(models.User).filter(models.User.client_hash == vote_req.clientHash).first()
     if not user:
@@ -368,7 +407,8 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
     }
 
 @app.get("/flags", response_model=FlagsResponse)
-def get_flags(ids: str, db: Session = Depends(database.get_db)):
+@limiter.limit("120/minute")
+def get_flags(request: Request, ids: str, db: Session = Depends(database.get_db)):
     """Get flagged status for a list of video IDs.
     
     Args:
@@ -421,7 +461,8 @@ def get_flags(ids: str, db: Session = Depends(database.get_db)):
     return {"videos": flagged_videos}
 
 @app.get("/video/{video_id}/stats")
-def get_video_stats(video_id: str, db: Session = Depends(database.get_db)):
+@limiter.limit("60/minute")
+def get_video_stats(request: Request, video_id: str, db: Session = Depends(database.get_db)):
     # Validate video ID format
     if not VIDEO_ID_PATTERN.match(video_id):
         raise HTTPException(status_code=400, detail="Invalid video ID format")
