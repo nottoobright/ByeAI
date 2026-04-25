@@ -3,8 +3,15 @@ import sys
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+from dotenv import load_dotenv
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://byeai_user:Alskdjfh123!@localhost/byeai")
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("ERROR: DATABASE_URL is not set.", file=sys.stderr)
+    print("Set it in the environment or in a .env file in the working directory.", file=sys.stderr)
+    sys.exit(1)
 
 def get_engine():
     return create_engine(DATABASE_URL)
