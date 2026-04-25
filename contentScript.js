@@ -16,7 +16,9 @@ const INLINE_ID = 'byeai-inline-button';
 const known = new Map();
 const anchorsById = new Map();
 const hiddenTiles = new Map();
+const knownChannels = new Map();  // channelId -> { flagged: bool, category: string }
 let banCategories = {};
+let hideFlaggedChannels = true;
 let currentVideoId = null;
 
 const getVid = url => {
@@ -66,6 +68,41 @@ function extractViewCount() {
   }
   
   return 0;
+}
+
+function extractCurrentChannelId() {
+  // First try ytInitialPlayerResponse — most reliable
+  try {
+    const scripts = document.querySelectorAll('script');
+    for (const script of scripts) {
+      const content = script.textContent;
+      if (content.includes('ytInitialPlayerResponse')) {
+        const match = content.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
+        if (match) {
+          const data = JSON.parse(match[1]);
+          const cid = data.videoDetails?.channelId;
+          if (cid && /^UC[\w-]{22}$/.test(cid)) return cid;
+        }
+      }
+    }
+  } catch {}
+
+  // Fallback: parse the channel link in the page header
+  const link = document.querySelector('ytd-channel-name a, ytd-video-owner-renderer a');
+  if (link?.href) {
+    const m = link.href.match(/\/channel\/(UC[\w-]{22})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function extractTileChannelId(tile) {
+  // Tiles on home/search have the channel link in #channel-info or .ytd-channel-name
+  const link = tile.querySelector('a[href*="/channel/UC"], a[href*="/@"]');
+  if (!link?.href) return null;
+  const m = link.href.match(/\/channel\/(UC[\w-]{22})/);
+  return m ? m[1] : null;
+  // Note: @handle links don't give us a UC ID; we accept those won't match.
 }
 
 function shouldHideVideo(videoData) {
@@ -160,6 +197,41 @@ async function fetchFlags(ids) {
   }
 }
 
+async function fetchChannelFlags(channelIds) {
+  const unknown = channelIds.filter(id => !knownChannels.has(id));
+  if (!unknown.length) return;
+  try {
+    const res = await fetch(`${api}/channels?ids=${unknown.join(',')}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const flagged = new Map((data.channels || []).map(c => [c.id, c.category]));
+    unknown.forEach(id => {
+      if (flagged.has(id)) {
+        knownChannels.set(id, { flagged: true, category: flagged.get(id) });
+      } else {
+        knownChannels.set(id, { flagged: false });
+      }
+    });
+  } catch {
+    unknown.forEach(id => knownChannels.set(id, { flagged: false }));
+  }
+}
+
+function shouldHideChannel(channelId) {
+  if (!hideFlaggedChannels) return false;
+  const data = knownChannels.get(channelId);
+  return !!data?.flagged;
+}
+
+function hideTilesForFlaggedChannels() {
+  document.querySelectorAll('ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer').forEach(tile => {
+    const cid = extractTileChannelId(tile);
+    if (cid && shouldHideChannel(cid)) {
+      hide(tile);
+    }
+  });
+}
+
 function processAnchor(a) {
   const id = getVid(a.href);
   if (!id) return;
@@ -177,9 +249,22 @@ function processAnchor(a) {
 function scanAllTiles() {
   document.querySelectorAll('a#video-title-link, a.yt-simple-endpoint').forEach(processAnchor);
   processSidebarVideos();
-  
+
   const unknown = [...known.entries()].filter(([, v]) => v.flagged === null).map(([k]) => k);
   if (unknown.length > 0) fetchFlags(unknown);
+
+  if (hideFlaggedChannels) {
+    const cids = new Set();
+    document.querySelectorAll('ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer').forEach(tile => {
+      const cid = extractTileChannelId(tile);
+      if (cid) cids.add(cid);
+    });
+    if (cids.size > 0) {
+      fetchChannelFlags([...cids]).then(() => hideTilesForFlaggedChannels());
+    } else {
+      hideTilesForFlaggedChannels();
+    }
+  }
 }
 
 function injectInlineButton() {
@@ -230,6 +315,21 @@ function injectInlineButton() {
   }
   
   titleElem.appendChild(btn);
+
+  const channelId = extractCurrentChannelId();
+  if (channelId) {
+    const chanBtn = document.createElement('button');
+    chanBtn.id = 'byeai-channel-button';
+    chanBtn.textContent = 'Flag channel';
+    chanBtn.title = 'Vote to flag this channel as AI-generated';
+    Object.assign(chanBtn.style, {
+      marginLeft: '6px', padding: '6px 10px', border: 'none',
+      borderRadius: '6px', cursor: 'pointer', background: '#555',
+      color: '#fff', fontSize: '12px', fontWeight: 'bold'
+    });
+    chanBtn.onclick = () => showChannelPicker(channelId);
+    titleElem.appendChild(chanBtn);
+  }
 }
 
 function showPicker(id) {
@@ -377,6 +477,95 @@ function showPicker(id) {
   document.body.appendChild(box);
 }
 
+function showChannelPicker(channelId) {
+  const selectedCategories = new Set();
+
+  const overlay = document.createElement('div');
+  Object.assign(overlay.style, {
+    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.5)', zIndex: 99998
+  });
+  overlay.onclick = () => { overlay.remove(); box.remove(); };
+  document.body.appendChild(overlay);
+
+  const box = document.createElement('div');
+  Object.assign(box.style, {
+    position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+    background: '#fff', boxShadow: '0 4px 24px rgba(0,0,0,.2)', zIndex: 99999,
+    borderRadius: '12px', minWidth: '280px', maxWidth: '320px', overflow: 'hidden'
+  });
+
+  const header = document.createElement('div');
+  header.textContent = '🚩 Flag this channel';
+  Object.assign(header.style, {
+    padding: '16px 20px', borderBottom: '1px solid #eee',
+    fontWeight: '600', fontSize: '16px', background: '#fafafa'
+  });
+  box.appendChild(header);
+
+  const catContainer = document.createElement('div');
+  Object.assign(catContainer.style, { padding: '8px 12px' });
+
+  cats.forEach(c => {
+    const row = document.createElement('label');
+    Object.assign(row.style, {
+      display: 'flex', alignItems: 'center', padding: '10px 12px',
+      cursor: 'pointer', fontSize: '14px', borderRadius: '8px',
+      margin: '4px 0', border: '1px solid #e0e0e0', background: '#fff',
+    });
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = c.id;
+    Object.assign(checkbox.style, { marginRight: '10px', accentColor: '#dc3545' });
+    checkbox.onchange = () => {
+      if (checkbox.checked) selectedCategories.add(c.id);
+      else selectedCategories.delete(c.id);
+      submitBtn.disabled = selectedCategories.size === 0;
+    };
+    const label = document.createElement('span');
+    label.textContent = c.label;
+    row.appendChild(checkbox);
+    row.appendChild(label);
+    catContainer.appendChild(row);
+  });
+  box.appendChild(catContainer);
+
+  const btnContainer = document.createElement('div');
+  Object.assign(btnContainer.style, {
+    padding: '12px 16px', borderTop: '1px solid #eee', display: 'flex', gap: '8px'
+  });
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  Object.assign(cancelBtn.style, {
+    flex: 1, padding: '10px', border: '1px solid #ddd', borderRadius: '8px',
+    background: '#fff', color: '#666', fontSize: '14px', cursor: 'pointer'
+  });
+  cancelBtn.onclick = () => { overlay.remove(); box.remove(); };
+  const submitBtn = document.createElement('button');
+  submitBtn.textContent = 'Submit Flag';
+  submitBtn.disabled = true;
+  Object.assign(submitBtn.style, {
+    flex: 1, padding: '10px', border: 'none', borderRadius: '8px',
+    background: '#dc3545', color: '#fff', fontSize: '14px', fontWeight: '600', cursor: 'pointer'
+  });
+  submitBtn.onclick = () => {
+    if (selectedCategories.size === 0) return;
+    chrome.runtime.sendMessage({
+      type: 'flagChannel',
+      channelId,
+      categories: [...selectedCategories],
+    });
+    overlay.remove();
+    box.remove();
+    toastMsg('Channel flag submitted', null);
+  };
+  btnContainer.appendChild(cancelBtn);
+  btnContainer.appendChild(submitBtn);
+  box.appendChild(btnContainer);
+
+  document.body.appendChild(box);
+}
+
 function toastMsg(msg, undo) {
   let toast = document.createElement('div');
   Object.assign(toast.style,{position:'fixed',bottom:'24px',left:'50%',transform:'translateX(-50%)',
@@ -446,8 +635,9 @@ chrome.runtime.onMessage.addListener(m => {
   if (m.type === 'cleared') location.reload();
 });
 
-chrome.storage.local.get([blockedKey, scopeKey]).then(store => {
+chrome.storage.local.get([blockedKey, scopeKey, 'hideFlaggedChannels']).then(store => {
   banCategories = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
+  hideFlaggedChannels = store.hideFlaggedChannels !== false;  // default ON
   (store[blockedKey] || []).forEach(id => known.set(id, { flagged: true, category: 'local' }));
   initialize();
 });
@@ -474,3 +664,13 @@ setInterval(() => {
     setTimeout(initialize, 100);
   }
 }, 500);
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes.hideFlaggedChannels) {
+    hideFlaggedChannels = changes.hideFlaggedChannels.newValue !== false;
+    if (hideFlaggedChannels) hideTilesForFlaggedChannels();
+    else location.reload();  // simplest way to undo channel-based hiding
+  }
+});
+
