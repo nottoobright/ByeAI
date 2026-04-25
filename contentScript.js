@@ -210,7 +210,7 @@ function injectInlineButton() {
   if (!titleElem) return;
   
   const videoData = known.get(vid);
-  const isAlreadyFlagged = videoData?.flagged === true;
+  const isAlreadyFlagged = videoData?.flagged === true || videoData?.shadowFlagged === true;
   
   const btn = document.createElement('button');
   btn.id = INLINE_ID;
@@ -409,22 +409,32 @@ function initialize() {
 
 chrome.runtime.onMessage.addListener(m => {
   if (m.type === 'videoFlagged') {
-    applyFlag(m.id, m.category || 'local');
-    
-        if (m.id === getCurrentVideoId()) {
+    if (!m.shadowMode) {
+      applyFlag(m.id, m.category || 'local');
+    } else {
+      const existing = known.get(m.id) || { flagged: false };
+      existing.shadowFlagged = true;
+      known.set(m.id, existing);
+    }
+
+    if (m.id === getCurrentVideoId()) {
       injectInlineButton();
     }
 
-    if (m.serverResponse) {
+    let baseMsg;
+    if (m.shadowMode) {
+      baseMsg = 'Flag submitted (not hiding)';
+    } else if (m.serverResponse) {
       const source = m.serverResponse.view_count_source === 'api' ? 'API' : 'page';
-      const msg = `Video flagged! Score: ${m.serverResponse.new_score.toFixed(1)}/${m.serverResponse.threshold} (views via ${source})`;
-      if (m.showUndo) {
-        toastMsg(msg, () => chrome.runtime.sendMessage({type: 'unblock', id: m.id}));
-      } else {
-        toastMsg(msg, null);
-      }
-    } else if (m.showUndo) {
-      toastMsg('Video hidden.', () => chrome.runtime.sendMessage({type: 'unblock', id: m.id}));
+      baseMsg = `Video flagged! Score: ${m.serverResponse.new_score.toFixed(1)}/${m.serverResponse.threshold} (views via ${source})`;
+    } else {
+      baseMsg = 'Video hidden.';
+    }
+
+    if (m.showUndo) {
+      toastMsg(baseMsg, () => chrome.runtime.sendMessage({ type: 'unblock', id: m.id }));
+    } else {
+      toastMsg(baseMsg, null);
     }
   }
   

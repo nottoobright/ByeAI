@@ -2,6 +2,7 @@ const idKey = 'clientHash';
 const blockedKey = 'blockedIds';
 const scopeKey = 'banCategories';
 const analyticsKey = 'analytics';
+const flagOnlyKey = 'flagOnly';
 const api = 'https://api.byeai.tech'; // Use this in production
 //const api = 'http://localhost:8000' // Use this for local testing
 const cats = [
@@ -139,32 +140,54 @@ chrome.contextMenus.onClicked.addListener(async info => {
   const cat = info.menuItemId.slice(4);
   const id = getVid(info.linkUrl) || getVid(info.srcUrl) || getVid(info.pageUrl);
   if (!id) return;
-  // The backend will fetch the view count if it's 0 and source is context_menu
 
-  await Promise.all([sendVote(id, cat, 0, 'context_menu'), storeBlock(id)]);
-  broadcast({ type: 'videoFlagged', id, category: cat, showUndo: true });
+  const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
+  const tasks = [sendVote(id, cat, 0, 'context_menu')];
+  if (!flagOnly) tasks.push(storeBlock(id));
+  await Promise.all(tasks);
+
+  broadcast({ type: 'videoFlagged', id, category: cat, showUndo: !flagOnly, shadowMode: flagOnly });
 });
 
 
 chrome.runtime.onMessage.addListener(async (msg, sender) => {
   switch (msg.type) {
-    case 'flag':
+    case 'flag': {
+      const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
       const serverResponse = await sendVote(msg.id, msg.cat, msg.viewCount, msg.flagSource);
-      await storeBlock(msg.id);
-      broadcast({ type: 'videoFlagged', id: msg.id, category: msg.cat, showUndo: true, serverResponse }, sender.tab?.id);
+      if (!flagOnly) {
+        await storeBlock(msg.id);
+      }
+      broadcast({
+        type: 'videoFlagged',
+        id: msg.id,
+        category: msg.cat,
+        showUndo: !flagOnly,
+        shadowMode: flagOnly,
+        serverResponse
+      }, sender.tab?.id);
       break;
-    case 'flagMultiple':
-      // Handle multi-category flagging - send one vote per category
+    }
+    case 'flagMultiple': {
+      const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
       const categories = msg.categories || [];
       const flagSource = msg.flagSource || 'popup';
       for (const cat of categories) {
         await sendVote(msg.id, cat, msg.viewCount || 0, flagSource);
       }
-      await storeBlock(msg.id);
-      // Use sender.tab?.id for inline button, or msg.tabId for popup
+      if (!flagOnly) {
+        await storeBlock(msg.id);
+      }
       const targetTabId = sender.tab?.id || msg.tabId;
-      broadcast({ type: 'videoFlagged', id: msg.id, categories: categories, showUndo: true }, targetTabId);
+      broadcast({
+        type: 'videoFlagged',
+        id: msg.id,
+        categories,
+        showUndo: !flagOnly,
+        shadowMode: flagOnly
+      }, targetTabId);
       break;
+    }
     case 'unblock':
       await removeBlock(msg.id);
       broadcast({ type: 'videoUnblocked', id: msg.id }, sender.tab?.id);
