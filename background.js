@@ -144,7 +144,11 @@ function todayKey() {
 // recordHide() counts only user-initiated hides (their own flag actions).
 // Server-side consensus hides are NOT counted here — they would inflate
 // stats with videos the user never actually saw, since /flags hides on first scan.
-async function recordHide(category) {
+// Accepts a single category or an array. totalHidden + byDay increment once
+// per call (one video); byCategory increments per supplied category.
+async function recordHide(categories) {
+  const cats = Array.isArray(categories) ? categories : [categories];
+  if (cats.length === 0) return;
   const { [statsKey]: stats = null } = await chrome.storage.local.get(statsKey);
   const next = stats || {
     totalHidden: 0,
@@ -153,7 +157,9 @@ async function recordHide(category) {
     firstSeenAt: Date.now(),
   };
   next.totalHidden += 1;
-  next.byCategory[category] = (next.byCategory[category] || 0) + 1;
+  for (const c of cats) {
+    next.byCategory[c] = (next.byCategory[c] || 0) + 1;
+  }
   const day = todayKey();
   next.byDay[day] = (next.byDay[day] || 0) + 1;
 
@@ -198,7 +204,7 @@ chrome.contextMenus.onClicked.addListener(async info => {
   const tasks = [sendVote(id, cat, 0, 'context_menu')];
   if (!flagOnly) {
     tasks.push(storeBlock(id));
-    tasks.push(recordHide(cat));
+    tasks.push(recordHide([cat]));
   }
   await Promise.all(tasks);
 
@@ -213,7 +219,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const serverResponse = await sendVote(msg.id, msg.cat, msg.viewCount, msg.flagSource);
       if (!flagOnly) {
         await storeBlock(msg.id);
-        await recordHide(msg.cat);
+        await recordHide([msg.cat]);
       }
       broadcast({
         type: 'videoFlagged',
@@ -234,9 +240,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       }
       if (!flagOnly) {
         await storeBlock(msg.id);
-        for (const cat of categories) {
-          await recordHide(cat);
-        }
+        await recordHide(categories);
       }
       const targetTabId = sender.tab?.id || msg.tabId;
       broadcast({
