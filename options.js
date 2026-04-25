@@ -9,10 +9,12 @@ const cats = [
 ];
 const scopeKey = 'banCategories';
 const analyticsKey = 'analytics';
+const flagOnlyKey = 'flagOnly';
 const blockedKey = 'blockedIds';
 
 const catsDiv = document.getElementById('cats');
 const analyticsBox = document.getElementById('analytics');
+const flagOnlyBox = document.getElementById('flagOnly');
 const exportBtn = document.getElementById('export');
 const importBtn = document.getElementById('import');
 const importFile = document.getElementById('importFile');
@@ -26,7 +28,7 @@ exportBtn.textContent = 'Export blocked list';
 importBtn.textContent = 'Import blocked list';
 
 async function load() {
-  const store = await chrome.storage.local.get([scopeKey, analyticsKey]);
+  const store = await chrome.storage.local.get([scopeKey, analyticsKey, flagOnlyKey]);
   const active = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
   
   catsDiv.innerHTML = '';
@@ -66,6 +68,7 @@ async function load() {
   });
   
   analyticsBox.checked = !!store[analyticsKey];
+  flagOnlyBox.checked = !!store[flagOnlyKey];
   addCategoryControls();
 }
 
@@ -139,6 +142,11 @@ function showFeedback(message) {
 analyticsBox.onchange = async () => {
   await chrome.storage.local.set({ [analyticsKey]: analyticsBox.checked });
   showFeedback(`Analytics ${analyticsBox.checked ? 'enabled' : 'disabled'}`);
+};
+
+flagOnlyBox.onchange = async () => {
+  await chrome.storage.local.set({ [flagOnlyKey]: flagOnlyBox.checked });
+  showFeedback(`Shadow mode ${flagOnlyBox.checked ? 'enabled' : 'disabled'}`);
 };
 
 exportBtn.onclick = async () => {
