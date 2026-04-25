@@ -277,6 +277,10 @@ function injectInlineButton() {
   if (existingButton) {
     existingButton.remove();
   }
+  const existingChannelButton = document.getElementById('byeai-channel-button');
+  if (existingChannelButton) {
+    existingChannelButton.remove();
+  }
   
   const selectors = [
     'ytd-watch-metadata #title h1',
