@@ -23,6 +23,10 @@ let currentTabId = null;
 
 document.getElementById('settings').onclick = () => chrome.runtime.openOptionsPage();
 
+document.getElementById('viewStats').onclick = () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL('stats.html') });
+};
+
 function updateSubmitButton() {
   const count = selectedCategories.size;
   submitBtn.disabled = count === 0;

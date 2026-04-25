@@ -3,6 +3,8 @@ const blockedKey = 'blockedIds';
 const scopeKey = 'banCategories';
 const analyticsKey = 'analytics';
 const flagOnlyKey = 'flagOnly';
+const statsKey = 'stats';
+const STATS_DAY_CAP = 90;
 const api = 'https://api.byeai.tech'; // Use this in production
 //const api = 'http://localhost:8000' // Use this for local testing
 const cats = [
@@ -135,6 +137,36 @@ async function removeBlock(id) {
   await chrome.storage.local.set({ [blockedKey]: blockedIds.filter(x => x !== id) });
 }
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// recordHide() counts only user-initiated hides (their own flag actions).
+// Server-side consensus hides are NOT counted here — they would inflate
+// stats with videos the user never actually saw, since /flags hides on first scan.
+async function recordHide(category) {
+  const { [statsKey]: stats = null } = await chrome.storage.local.get(statsKey);
+  const next = stats || {
+    totalHidden: 0,
+    byCategory: {},
+    byDay: {},
+    firstSeenAt: Date.now(),
+  };
+  next.totalHidden += 1;
+  next.byCategory[category] = (next.byCategory[category] || 0) + 1;
+  const day = todayKey();
+  next.byDay[day] = (next.byDay[day] || 0) + 1;
+
+  // Trim to STATS_DAY_CAP days (keep newest, drop oldest)
+  const days = Object.keys(next.byDay).sort();
+  while (days.length > STATS_DAY_CAP) {
+    const oldest = days.shift();
+    delete next.byDay[oldest];
+  }
+
+  await chrome.storage.local.set({ [statsKey]: next });
+}
+
 function broadcast(msg, tabId = null) {
   if (tabId) {
     chrome.tabs.sendMessage(tabId, msg, () => chrome.runtime.lastError);
@@ -164,7 +196,10 @@ chrome.contextMenus.onClicked.addListener(async info => {
 
   const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
   const tasks = [sendVote(id, cat, 0, 'context_menu')];
-  if (!flagOnly) tasks.push(storeBlock(id));
+  if (!flagOnly) {
+    tasks.push(storeBlock(id));
+    tasks.push(recordHide(cat));
+  }
   await Promise.all(tasks);
 
   broadcast({ type: 'videoFlagged', id, category: cat, showUndo: !flagOnly, shadowMode: flagOnly });
@@ -178,6 +213,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const serverResponse = await sendVote(msg.id, msg.cat, msg.viewCount, msg.flagSource);
       if (!flagOnly) {
         await storeBlock(msg.id);
+        await recordHide(msg.cat);
       }
       broadcast({
         type: 'videoFlagged',
@@ -198,6 +234,9 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       }
       if (!flagOnly) {
         await storeBlock(msg.id);
+        for (const cat of categories) {
+          await recordHide(cat);
+        }
       }
       const targetTabId = sender.tab?.id || msg.tabId;
       broadcast({
