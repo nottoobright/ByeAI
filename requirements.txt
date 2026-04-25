@@ -15,3 +15,7 @@ python-dotenv==1.0.1
 
 # Pydantic for data validation
 pydantic==2.11.7
+
+# Testing
+pytest==8.3.3
+pytest-asyncio==0.24.0
