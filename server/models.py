@@ -43,3 +43,24 @@ class ReputationLog(Base):
     timestamp = Column(BigInteger, nullable=False)
     
     user = relationship("User", back_populates="reputation_logs")
+
+class Channel(Base):
+    __tablename__ = "channels"
+    channel_id = Column(String, primary_key=True, index=True)
+    score = Column(Float, default=0.0, nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    votes = relationship("ChannelVote", back_populates="channel")
+
+
+class ChannelVote(Base):
+    __tablename__ = "channel_votes"
+    id = Column(Integer, primary_key=True, index=True)
+    user_hash = Column(String, ForeignKey("users.client_hash"), index=True)
+    channel_id = Column(String, ForeignKey("channels.channel_id"), index=True)
+    category = Column(String, nullable=False, index=True)
+    timestamp = Column(BigInteger, nullable=False)
+
+    user = relationship("User")
+    channel = relationship("Channel", back_populates="votes")

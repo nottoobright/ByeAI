@@ -91,6 +91,27 @@ async function sendVote(id, cat, viewCount = 0, flagSource = 'unknown') {
   }
 }
 
+async function sendChannelVote(channelId, category) {
+  try {
+    const { clientHash } = await chrome.storage.local.get(idKey);
+    const payload = {
+      channelId,
+      category,
+      clientHash,
+      timestamp: Date.now(),
+    };
+    const response = await fetch(`${api}/channel/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) console.warn('ByeAI: Channel vote failed:', response.status);
+  } catch (e) {
+    console.warn('ByeAI: Channel vote error:', e);
+  }
+}
+
 async function getSessionId() {
   const sessionKey = 'sessionId';
   let { sessionId } = await chrome.storage.session?.get(sessionKey) || {};
@@ -186,6 +207,14 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         showUndo: !flagOnly,
         shadowMode: flagOnly
       }, targetTabId);
+      break;
+    }
+    case 'flagChannel': {
+      const categories = msg.categories || [];
+      for (const cat of categories) {
+        await sendChannelVote(msg.channelId, cat);
+      }
+      broadcast({ type: 'channelFlagged', channelId: msg.channelId }, sender.tab?.id);
       break;
     }
     case 'unblock':

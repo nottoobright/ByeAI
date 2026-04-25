@@ -67,6 +67,8 @@ app.add_middleware(
 
 # Valid YouTube video ID pattern (11 characters, alphanumeric + dash/underscore)
 VIDEO_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{11}$')
+# YouTube channel IDs: 24 chars, start with "UC", alphanumeric + dash/underscore
+CHANNEL_ID_PATTERN = re.compile(r'^UC[a-zA-Z0-9_-]{22}$')
 # Valid UUID pattern for clientHash
 UUID_PATTERN = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', re.IGNORECASE)
 # Valid categories (lowercase, kebab-case for consistency)
@@ -80,6 +82,7 @@ VALID_CATEGORIES = [
     'other'            # Other AI usage
 ]
 VALID_FLAG_SOURCES = ['inline_button', 'context_menu', 'popup', 'thumbnail', 'unknown']
+CHANNEL_FLAG_THRESHOLD = 10  # weighted votes to flag a channel
 
 class VoteRequest(BaseModel):
     videoId: str
@@ -120,6 +123,37 @@ class VoteRequest(BaseModel):
 
 class FlagsResponse(BaseModel):
     videos: List[dict]
+
+class ChannelVoteRequest(BaseModel):
+    channelId: str
+    category: str
+    clientHash: str
+    timestamp: int
+
+    @field_validator('channelId')
+    @classmethod
+    def validate_channel_id(cls, v):
+        if not CHANNEL_ID_PATTERN.match(v):
+            raise ValueError('Invalid YouTube channel ID format')
+        return v
+
+    @field_validator('clientHash')
+    @classmethod
+    def validate_client_hash(cls, v):
+        if not UUID_PATTERN.match(v):
+            raise ValueError('Invalid client hash format')
+        return v
+
+    @field_validator('category')
+    @classmethod
+    def validate_category(cls, v):
+        if v not in VALID_CATEGORIES:
+            raise ValueError(f'Invalid category. Must be one of: {VALID_CATEGORIES}')
+        return v
+
+
+class ChannelsResponse(BaseModel):
+    channels: List[dict]
 
 class YouTubeService:
     def __init__(self):
@@ -496,6 +530,96 @@ async def get_quota_status():
         "requests_remaining": youtube_service.max_daily_requests - youtube_service.daily_requests,
         "quota_percentage": (youtube_service.daily_requests / youtube_service.max_daily_requests) * 100
     }
+
+@app.post("/channel/vote")
+@limiter.limit("30/minute")
+async def submit_channel_vote(vote_req: ChannelVoteRequest, request: Request,
+                              db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.client_hash == vote_req.clientHash).first()
+    if not user:
+        user = models.User(client_hash=vote_req.clientHash, reputation_points=1)
+        db.add(user)
+        db.flush()
+
+    channel = db.query(models.Channel).filter(models.Channel.channel_id == vote_req.channelId).first()
+    if not channel:
+        channel = models.Channel(channel_id=vote_req.channelId, score=0.0)
+        db.add(channel)
+        db.flush()
+
+    existing = db.query(models.ChannelVote).filter(and_(
+        models.ChannelVote.user_hash == user.client_hash,
+        models.ChannelVote.channel_id == channel.channel_id,
+        models.ChannelVote.category == vote_req.category,
+    )).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="User has already voted for this category on this channel")
+
+    is_first_vote = not db.query(models.ChannelVote).filter(and_(
+        models.ChannelVote.user_hash == user.client_hash,
+        models.ChannelVote.channel_id == channel.channel_id,
+    )).first()
+
+    db.add(models.ChannelVote(
+        user_hash=user.client_hash,
+        channel_id=channel.channel_id,
+        category=vote_req.category,
+        timestamp=vote_req.timestamp,
+    ))
+
+    if is_first_vote:
+        channel.score += get_user_reputation_score(user.reputation_points)
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "new_score": channel.score,
+        "threshold": CHANNEL_FLAG_THRESHOLD,
+        "is_flagged": channel.score >= CHANNEL_FLAG_THRESHOLD,
+        "user_reputation": user.reputation_points,
+    }
+
+
+@app.get("/channels", response_model=ChannelsResponse)
+@limiter.limit("120/minute")
+def get_flagged_channels(request: Request, ids: str, db: Session = Depends(database.get_db)):
+    """Return which of the given channel IDs are above the flag threshold."""
+    if not ids or not ids.strip():
+        return {"channels": []}
+
+    channel_ids = [c.strip() for c in ids.split(',') if c.strip()]
+    MAX_IDS = 100
+    if len(channel_ids) > MAX_IDS:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_IDS} channel IDs allowed per request")
+
+    valid_ids = [c for c in channel_ids if CHANNEL_ID_PATTERN.match(c)]
+    if not valid_ids:
+        return {"channels": []}
+
+    channels = db.query(models.Channel).filter(
+        models.Channel.channel_id.in_(valid_ids),
+        models.Channel.score >= CHANNEL_FLAG_THRESHOLD,
+    ).all()
+
+    out = []
+    for ch in channels:
+        category_counts = db.query(
+            models.ChannelVote.category,
+            func.count(models.ChannelVote.category).label('count')
+        ).filter(
+            models.ChannelVote.channel_id == ch.channel_id
+        ).group_by(models.ChannelVote.category).order_by(
+            func.count(models.ChannelVote.category).desc()
+        ).all()
+        most_common = category_counts[0][0] if category_counts else "other"
+        out.append({
+            "id": ch.channel_id,
+            "category": most_common,
+            "score": ch.score,
+        })
+
+    return {"channels": out}
 
 @app.get("/health")
 async def health_check():

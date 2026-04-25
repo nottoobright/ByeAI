@@ -114,6 +114,34 @@ def run_migration():
             else:
                 print("Reputation_logs table exists, no changes needed...")
             
+            if not check_table_exists(engine, 'channels'):
+                print("Creating channels table...")
+                conn.execute(text("""
+                    CREATE TABLE channels (
+                        channel_id VARCHAR NOT NULL,
+                        score DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (channel_id)
+                    )
+                """))
+            else:
+                print("Channels table exists, no changes needed...")
+
+            if not check_table_exists(engine, 'channel_votes'):
+                print("Creating channel_votes table...")
+                conn.execute(text("""
+                    CREATE TABLE channel_votes (
+                        id SERIAL PRIMARY KEY,
+                        user_hash VARCHAR REFERENCES users(client_hash),
+                        channel_id VARCHAR REFERENCES channels(channel_id),
+                        category VARCHAR NOT NULL,
+                        timestamp BIGINT NOT NULL
+                    )
+                """))
+            else:
+                print("Channel_votes table exists, no changes needed...")
+            
             print("Creating indexes for performance...")
             conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS idx_users_client_hash ON users(client_hash)
@@ -130,6 +158,9 @@ def run_migration():
             conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS idx_reputation_logs_user_hash ON reputation_logs(user_hash)
             """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_channels_channel_id ON channels(channel_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_channel_votes_user_hash ON channel_votes(user_hash)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_channel_votes_channel_id ON channel_votes(channel_id)"))
             
             trans.commit()
             print("Migration completed successfully!")
@@ -144,7 +175,7 @@ def verify_migration():
     engine = get_engine()
     
     with engine.connect() as conn:
-        tables = ['users', 'videos', 'votes', 'reputation_logs']
+        tables = ['users', 'videos', 'votes', 'reputation_logs', 'channels', 'channel_votes']
         
         for table in tables:
             result = conn.execute(text(f"SELECT COUNT(*) FROM {table}"))
