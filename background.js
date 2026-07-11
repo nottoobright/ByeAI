@@ -111,16 +111,6 @@ async function sendChannelVote(channelId, category) {
   }
 }
 
-async function getSessionId() {
-  const sessionKey = 'sessionId';
-  let { sessionId } = await chrome.storage.session?.get(sessionKey) || {};
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-    await chrome.storage.session?.set({ [sessionKey]: sessionId });
-  }
-  return sessionId;
-}
-
 async function storeBlock(id) {
   const { blockedIds = [] } = await chrome.storage.local.get(blockedKey);
   if (!blockedIds.includes(id)) {
@@ -276,11 +266,5 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       }
       break;
     }
-  }
-});
-
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes[scopeKey]) {
-    broadcast({ type: 'settingsChanged' });
   }
 });

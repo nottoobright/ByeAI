@@ -851,5 +851,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
     showPlaceholders = changes.showPlaceholders.newValue !== false;
     if (!showPlaceholders) document.querySelectorAll('.byeai-placeholder').forEach(b => b.remove());
   }
+  if (changes[scopeKey]) {
+    const next = changes[scopeKey].newValue ?? {};
+    // If any category was turned OFF, previously hidden tiles must reappear —
+    // a reload is the simplest correct path (mirrors the channel-hide toggle).
+    const anyDisabled = Object.keys(banCategories).some(k => banCategories[k] === true && next[k] !== true);
+    banCategories = next;
+    if (anyDisabled) location.reload();
+    else scanAllTiles();
+  }
 });
 
