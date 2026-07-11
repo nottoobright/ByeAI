@@ -294,19 +294,10 @@ function scanAllTiles() {
 
 function injectInlineButton() {
   if (location.pathname !== '/watch') return;
-  
+
   const vid = getCurrentVideoId();
   if (!vid) return;
-  
-  const existingButton = document.getElementById(INLINE_ID);
-  if (existingButton) {
-    existingButton.remove();
-  }
-  const existingChannelButton = document.getElementById('byeai-channel-button');
-  if (existingChannelButton) {
-    existingChannelButton.remove();
-  }
-  
+
   const selectors = [
     'ytd-watch-metadata #title h1',
     'ytd-video-primary-info-renderer #title h1',
@@ -314,50 +305,65 @@ function injectInlineButton() {
     'h1.title',
     'h1.ytd-video-primary-info-renderer'
   ];
-  
+
   let titleElem = null;
   for (const sel of selectors) {
     titleElem = document.querySelector(sel);
     if (titleElem) break;
   }
-  
   if (!titleElem) return;
-  
+
   const videoData = known.get(vid);
   const isAlreadyFlagged = videoData?.flagged === true || videoData?.shadowFlagged === true;
-  
-  const btn = document.createElement('button');
-  btn.id = INLINE_ID;
-  btn.textContent = isAlreadyFlagged ? 'Already Flagged' : 'Flag AI';
-  btn.style.marginLeft = '12px';
-  btn.style.padding = '6px 10px';
-  btn.style.border = 'none';
-  btn.style.borderRadius = '6px';
-  btn.style.cursor = isAlreadyFlagged ? 'default' : 'pointer';
-  btn.style.background = isAlreadyFlagged ? '#888' : '#e84545';
-  btn.style.color = '#fff';
-  btn.style.fontSize = '12px';
-  btn.style.fontWeight = 'bold';
-  
-  if (!isAlreadyFlagged) {
-    btn.onclick = () => showPicker(vid);
+  const state = isAlreadyFlagged ? 'flagged' : 'fresh';
+
+  const existing = document.getElementById(INLINE_ID);
+  const upToDate = existing && existing.dataset.vid === vid &&
+                   existing.dataset.state === state && titleElem.contains(existing);
+  if (!upToDate) {
+    existing?.remove();
+    const btn = document.createElement('button');
+    btn.id = INLINE_ID;
+    btn.dataset.vid = vid;
+    btn.dataset.state = state;
+    btn.textContent = isAlreadyFlagged ? 'Already Flagged' : 'Flag AI';
+    btn.style.marginLeft = '12px';
+    btn.style.padding = '6px 10px';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '6px';
+    btn.style.cursor = isAlreadyFlagged ? 'default' : 'pointer';
+    btn.style.background = isAlreadyFlagged ? '#888' : '#e84545';
+    btn.style.color = '#fff';
+    btn.style.fontSize = '12px';
+    btn.style.fontWeight = 'bold';
+    if (!isAlreadyFlagged) {
+      btn.onclick = () => showPicker(vid);
+    }
+    titleElem.appendChild(btn);
   }
-  
-  titleElem.appendChild(btn);
 
   const channelId = extractCurrentChannelId();
+  const existingChan = document.getElementById('byeai-channel-button');
   if (channelId) {
-    const chanBtn = document.createElement('button');
-    chanBtn.id = 'byeai-channel-button';
-    chanBtn.textContent = 'Flag channel';
-    chanBtn.title = 'Vote to flag this channel as AI-generated';
-    Object.assign(chanBtn.style, {
-      marginLeft: '6px', padding: '6px 10px', border: 'none',
-      borderRadius: '6px', cursor: 'pointer', background: '#555',
-      color: '#fff', fontSize: '12px', fontWeight: 'bold'
-    });
-    chanBtn.onclick = () => showChannelPicker(channelId);
-    titleElem.appendChild(chanBtn);
+    const chanUpToDate = existingChan && existingChan.dataset.cid === channelId &&
+                         titleElem.contains(existingChan);
+    if (!chanUpToDate) {
+      existingChan?.remove();
+      const chanBtn = document.createElement('button');
+      chanBtn.id = 'byeai-channel-button';
+      chanBtn.dataset.cid = channelId;
+      chanBtn.textContent = 'Flag channel';
+      chanBtn.title = 'Vote to flag this channel as AI-generated';
+      Object.assign(chanBtn.style, {
+        marginLeft: '6px', padding: '6px 10px', border: 'none',
+        borderRadius: '6px', cursor: 'pointer', background: '#555',
+        color: '#fff', fontSize: '12px', fontWeight: 'bold'
+      });
+      chanBtn.onclick = () => showChannelPicker(channelId);
+      titleElem.appendChild(chanBtn);
+    }
+  } else {
+    existingChan?.remove();
   }
 }
 
