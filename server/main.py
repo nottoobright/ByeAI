@@ -63,6 +63,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
+    expose_headers=["Retry-After"],
 )
 
 # Valid YouTube video ID pattern (11 characters, alphanumeric + dash/underscore)
@@ -82,7 +83,17 @@ VALID_CATEGORIES = [
     'other'            # Other AI usage
 ]
 VALID_FLAG_SOURCES = ['inline_button', 'context_menu', 'popup', 'thumbnail', 'unknown']
-CHANNEL_FLAG_THRESHOLD = 10  # weighted votes to flag a channel
+
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, falling back to the default on missing/malformed values."""
+    try:
+        return int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid {name} env value; using default {default}")
+        return default
+
+def get_channel_flag_threshold() -> int:
+    return _env_int("CHANNEL_FLAG_THRESHOLD", 10)
 
 class VoteRequest(BaseModel):
     videoId: str
@@ -256,7 +267,8 @@ def get_user_reputation_score(rep_points: int) -> float:
     return 1 + math.log2(max(1, rep_points))
 
 def calculate_threshold(view_count: int) -> int:
-    return max(15, math.ceil(0.05 * math.sqrt(view_count)))
+    floor = _env_int("VIDEO_THRESHOLD_FLOOR", 15)
+    return max(floor, math.ceil(0.05 * math.sqrt(view_count)))
 
 def update_user_reputations_safe(video_id: str) -> None:
     """Background-safe version that creates its own database session.
@@ -364,9 +376,11 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
         db.flush()
     
     view_count = vote_req.viewCount
-    
-    if vote_req.flagSource in ["thumbnail", "context_menu"] and view_count == 0:
+    used_api_lookup = False
+
+    if view_count == 0:
         try:
+            used_api_lookup = True
             api_view_count = await youtube_service.get_view_count(vote_req.videoId)
             if api_view_count > 0:
                 view_count = api_view_count
@@ -437,7 +451,7 @@ async def submit_vote(vote_req: VoteRequest, request: Request, db: Session = Dep
         "threshold": threshold,
         "is_flagged": video.score >= threshold,
         "user_reputation": user.reputation_points,
-        "view_count_source": "api" if vote_req.flagSource in ["thumbnail", "context_menu"] else "dom"
+        "view_count_source": "api" if used_api_lookup else "dom"
     }
 
 @app.get("/flags", response_model=FlagsResponse)
@@ -575,8 +589,8 @@ async def submit_channel_vote(vote_req: ChannelVoteRequest, request: Request,
     return {
         "status": "success",
         "new_score": channel.score,
-        "threshold": CHANNEL_FLAG_THRESHOLD,
-        "is_flagged": channel.score >= CHANNEL_FLAG_THRESHOLD,
+        "threshold": get_channel_flag_threshold(),
+        "is_flagged": channel.score >= get_channel_flag_threshold(),
         "user_reputation": user.reputation_points,
     }
 
@@ -599,7 +613,7 @@ def get_flagged_channels(request: Request, ids: str, db: Session = Depends(datab
 
     channels = db.query(models.Channel).filter(
         models.Channel.channel_id.in_(valid_ids),
-        models.Channel.score >= CHANNEL_FLAG_THRESHOLD,
+        models.Channel.score >= get_channel_flag_threshold(),
     ).all()
 
     out = []
@@ -626,6 +640,6 @@ async def health_check():
     """Health check endpoint for monitoring and load balancers."""
     return {
         "status": "healthy",
-        "version": "1.0.0",
+        "version": "1.4.0",
         "timestamp": datetime.now().isoformat()
     }
