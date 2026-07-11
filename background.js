@@ -186,6 +186,15 @@ ensureDefaults();
 buildMenus();
 chrome.action.setBadgeBackgroundColor({ color: '#dc3545' });
 
+// Clear the badge when a tab starts a full-page navigation; if the destination
+// is YouTube, the content script re-reports the count after its first scan.
+// (Reading the destination URL would need the "tabs" permission — this avoids it.)
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status === 'loading') {
+    chrome.action.setBadgeText({ tabId, text: '' });
+  }
+});
+
 chrome.runtime.onInstalled.addListener(() => {
   buildMenus();
   ensureDefaults();
