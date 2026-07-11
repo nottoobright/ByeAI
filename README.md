@@ -22,7 +22,7 @@ As large language and vision models become more accessible, YouTube is seeing a 
 
 ## Installation
 
-1.  Install the extension from the [Chrome Web Store](https://link-to-your-store-page) (link will be active after launch).
+1.  Install the extension from the Chrome Web Store (link coming with the v1.4 release). Website: [https://nottoobright.github.io/ByeAI/](https://nottoobright.github.io/ByeAI/)
 2.  The extension will start working immediately. No configuration is needed.
 3.  Visit the **Settings** page to customize which categories of content are hidden or to opt-in to anonymous analytics.
 
@@ -32,4 +32,4 @@ This is an open-source project, and contributions are welcome! Please see the `C
 
 ## License
 
-The ByeAI browser extension is licensed under the [MIT License](https://link-to-license-file). The server-side code is licensed under the [AGPL-3.0 License](https://link-to-license-file).
+The ByeAI browser extension is licensed under the MIT License. The server-side code is licensed under the AGPL-3.0 License.

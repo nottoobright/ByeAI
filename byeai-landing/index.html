@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByeAI - Take Back Your YouTube</title>
+    <meta name="description" content="A crowdsourced browser extension to hide AI-generated content on YouTube. Community-powered filtering for a better viewing experience.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="nav">
+                <div class="logo">
+                    <img src="logo.png" alt="ByeAI logo">
+                    <h1>ByeAI</h1>
+                </div>
+                <nav class="nav-links">
+                    <a href="#features">Features</a>
+                    <a href="#install">Install Now</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Take Back Your YouTube</h1>
+                <p class="hero-subtitle">A crowdsourced browser extension that helps you hide AI-generated content and reclaim your viewing experience</p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary" id="install-btn" disabled>
+                        Install Extension
+                    </button>
+                    <a href="#features" class="btn btn-secondary">Learn More</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="browser-mockup">
+                    <div class="browser-bar">
+                        <div class="browser-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="browser-url">youtube.com</div>
+                    </div>
+                    <div class="browser-content">
+                        <div class="video-grid">
+                            <div class="video-card">
+                                <div class="video-thumbnail"></div>
+                                <div class="video-info">
+                                    <div class="video-title"></div>
+                                    <div class="video-channel"></div>
+                                </div>
+                            </div>
+                            <div class="video-card hidden-video">
+                                <div class="video-thumbnail blurred"></div>
+                                <div class="video-info">
+                                    <div class="video-title"></div>
+                                    <div class="video-channel"></div>
+                                </div>
+                                <div class="hidden-overlay">
+                                    <span>Hidden by ByeAI</span>
+                                </div>
+                            </div>
+                            <div class="video-card">
+                                <div class="video-thumbnail"></div>
+                                <div class="video-info">
+                                    <div class="video-title"></div>
+                                    <div class="video-channel"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <h2 class="section-title">Powerful Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Community-Powered</h3>
+                    <p>Harness the collective wisdom of users to identify and filter AI-generated content together.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Privacy First</h3>
+                    <p>No accounts required. Your identity is anonymous and your data stays on your device.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>One-Click Flagging</h3>
+                    <p>Instantly flag AI-generated videos with a single click. Quick and effortless reporting.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🏷️</div>
+                    <h3>Smart Categories</h3>
+                    <p>Flag content by type: AI scripts, voice-overs, thumbnails, music, deepfakes, and more.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⭐</div>
+                    <h3>Reputation System</h3>
+                    <p>Reliable contributors earn higher reputation, ensuring quality and preventing abuse.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🌐</div>
+                    <h3>Open Source</h3>
+                    <p>Fully transparent code. Built for trust and community.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+        <!-- Call to Action Section -->
+    <section class="cta" id="install">
+        <div class="container">
+            <div class="cta-content">
+                <h2>Ready to clean up your feed?</h2>
+                <p>Install the ByeAI extension from the Chrome Web Store and start enjoying a better YouTube today.</p>
+                <a href="https://link-to-your-store-page" class="btn btn-primary" target="_blank" rel="noopener noreferrer">Install for Chrome</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <h3>ByeAI</h3>
+                    <p>Take back your YouTube experience</p>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/nottoobright/ByeAI" target="_blank">GitHub</a>
+                    <a href="privacy/" target="_blank">Privacy</a>
+                    <a href="mailto:support@byeai.club">Contact</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 ByeAI. Open source and community-driven.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
