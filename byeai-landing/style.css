@@ -735,12 +735,32 @@ body {
     transform: translateY(-2px);
 }
 
+/* Keep nav button links styled as buttons, not plain nav text */
+.nav-links .btn-primary,
+.nav-links .btn-primary:hover {
+    color: var(--color-btn-primary-text);
+}
+
 /* Hero Section */
 .hero {
     padding: 80px 0 120px;
     min-height: 80vh;
     display: flex;
     align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    top: -20%;
+    right: -10%;
+    width: 60%;
+    height: 140%;
+    background: radial-gradient(circle, rgba(33, 128, 141, 0.08) 0%, rgba(33, 128, 141, 0) 70%);
+    pointer-events: none;
+    z-index: -1;
 }
 
 .hero .container {
@@ -755,10 +775,11 @@ body {
     font-weight: var(--font-weight-bold);
     line-height: 1.1;
     margin-bottom: var(--space-20);
-    background: linear-gradient(135deg, var(--color-text) 0%, #3b82f6 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--color-text);
+}
+
+.hero-title .accent {
+    color: var(--color-primary);
 }
 
 .hero-subtitle {
@@ -771,6 +792,12 @@ body {
 .hero-buttons {
     display: flex;
     gap: var(--space-16);
+}
+
+.hero-note {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    margin-top: 12px;
 }
 
 .btn {
@@ -816,6 +843,16 @@ body {
 .btn-secondary:hover {
     background: var(--color-secondary);
     transform: translateY(-2px);
+}
+
+.btn-lg {
+    padding: 14px 28px;
+    font-size: var(--font-size-lg);
+}
+
+.btn-sm {
+    padding: 8px 14px;
+    font-size: var(--font-size-sm);
 }
 
 /* Browser Mockup */
@@ -934,6 +971,15 @@ body {
     font-weight: var(--font-weight-medium);
 }
 
+.hidden-overlay span {
+    animation: byeaiPulse 3s ease-in-out infinite;
+}
+
+@keyframes byeaiPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.65; }
+}
+
 /* Features Section */
 .features {
     padding: 120px 0;
@@ -977,8 +1023,15 @@ body {
 }
 
 .feature-icon {
-    font-size: 2.5rem;
-    margin-bottom: var(--space-16);
+    width: 48px;
+    height: 48px;
+    background: var(--color-secondary);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto var(--space-16);
 }
 
 .feature-card h3 {
@@ -991,6 +1044,48 @@ body {
 .feature-card p {
     color: var(--color-text-secondary);
     line-height: 1.6;
+}
+
+/* How It Works Section */
+.how {
+    padding: 80px 0;
+}
+
+.how-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-24);
+}
+
+.how-step {
+    background: var(--color-surface);
+    border: 1px solid var(--color-card-border);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    text-align: center;
+}
+
+.how-num {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: var(--color-btn-primary-text);
+    font-weight: var(--font-weight-bold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--space-16);
+}
+
+.how-step h3 {
+    margin-bottom: var(--space-12);
+}
+
+.how-step p {
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin-bottom: 0;
 }
 
 /* Waitlist Section */
@@ -1108,19 +1203,36 @@ body {
 
 /* CTA Section */
 .cta {
-    padding: 4rem 0;
-    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
-    color: white;
+    padding: 80px 0;
+}
+
+.cta .cta-content {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-active));
+    border-radius: var(--radius-lg);
+    padding: 56px 32px;
     text-align: center;
-    margin-bottom: 4rem;
 }
 
 .cta-content h2 {
     font-size: 2rem;
     margin-bottom: 1rem;
+    color: var(--color-btn-primary-text);
 }
 
-.cta-
+.cta-content p {
+    color: var(--color-btn-primary-text);
+    opacity: 0.9;
+    margin-bottom: var(--space-32);
+}
+
+.btn-inverse {
+    background: var(--color-surface);
+    color: var(--color-primary);
+}
+
+.btn-inverse:hover {
+    background: var(--color-secondary);
+}
 
 /* Footer */
 .footer {
@@ -1193,6 +1305,10 @@ body {
     .features-grid {
         grid-template-columns: 1fr;
         gap: var(--space-24);
+    }
+
+    .how-grid {
+        grid-template-columns: 1fr;
     }
 
     .footer-content {
@@ -1270,6 +1386,10 @@ body {
 
     .video-channel {
         background: #2d3748;
+    }
+
+    .hero::before {
+        background: radial-gradient(circle, rgba(50, 184, 198, 0.08) 0%, rgba(50, 184, 198, 0) 70%);
     }
 }
 

@@ -1,5 +1,3 @@
-const installBtn = document.getElementById('install-btn');
-
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
@@ -8,7 +6,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function initializeApp() {
     setupSmoothScrolling();
-    setupInstallButton();
     setupScrollAnimations();
     setupInteractiveEffects();
     setupParallax();
@@ -49,22 +46,6 @@ function setupSmoothScrolling() {
                     top: targetPosition,
                     behavior: 'smooth'
                 });
-            }
-        });
-    }
-}
-
-// Setup install button
-function setupInstallButton() {
-    if (installBtn) {
-        // Make the hero install button clickable and scroll to the CTA section
-        installBtn.disabled = false;
-        installBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            const installSection = document.getElementById('install');
-            if (installSection) {
-                installSection.scrollIntoView({ behavior: 'smooth' });
             }
         });
     }
