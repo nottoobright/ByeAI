@@ -169,7 +169,7 @@ function applyUnflag(id) {
   processSidebarVideos();
 }
 
-const FLAGS_BATCH_SIZE = 100;      // server rejects >100 ids per request
+const MAX_IDS_PER_REQUEST = 100;   // server rejects >100 ids per /flags or /channels request
 let fetchBackoffUntil = 0;         // no API requests before this timestamp
 const inFlightVideos = new Set();
 const inFlightChannels = new Set();
@@ -181,8 +181,13 @@ function chunk(arr, size) {
 }
 
 function noteFetchFailure(res) {
+  // Only the delta-seconds form of Retry-After is supported; the HTTP-date form
+  // intentionally falls back to the 30 s default. Note the server must send
+  // Access-Control-Expose-Headers: Retry-After for this header to be visible
+  // cross-origin (that server change lands in a later task).
   const retryAfter = parseInt(res?.headers?.get?.('Retry-After'), 10);
-  fetchBackoffUntil = Date.now() + (Number.isFinite(retryAfter) ? retryAfter * 1000 : 30_000);
+  const seconds = Number.isFinite(retryAfter) ? Math.min(Math.max(retryAfter, 1), 300) : 30;
+  fetchBackoffUntil = Date.now() + seconds * 1000;
 }
 
 async function fetchFlags(ids) {
@@ -190,7 +195,8 @@ async function fetchFlags(ids) {
   if (!ids.length || Date.now() < fetchBackoffUntil) return;
   ids.forEach(id => inFlightVideos.add(id));
   try {
-    for (const batch of chunk(ids, FLAGS_BATCH_SIZE)) {
+    for (const batch of chunk(ids, MAX_IDS_PER_REQUEST)) {
+      if (Date.now() < fetchBackoffUntil) return;
       const res = await fetch(`${api}/flags?ids=${batch.join(',')}`);
       if (!res.ok) { noteFetchFailure(res); return; }
       const remoteData = await res.json();
@@ -215,7 +221,8 @@ async function fetchChannelFlags(channelIds) {
   if (!unknown.length || Date.now() < fetchBackoffUntil) return;
   unknown.forEach(id => inFlightChannels.add(id));
   try {
-    for (const batch of chunk(unknown, FLAGS_BATCH_SIZE)) {
+    for (const batch of chunk(unknown, MAX_IDS_PER_REQUEST)) {
+      if (Date.now() < fetchBackoffUntil) return;
       const res = await fetch(`${api}/channels?ids=${batch.join(',')}`);
       if (!res.ok) { noteFetchFailure(res); return; }
       const data = await res.json();
