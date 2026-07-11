@@ -22,7 +22,7 @@ As large language and vision models become more accessible, YouTube is seeing a 
 
 ## Installation
 
-1.  Install the extension from the Chrome Web Store (link coming with the v1.4 release). Website: [https://nottoobright.github.io/ByeAI/](https://nottoobright.github.io/ByeAI/)
+1.  Install the extension from the Chrome Web Store (link coming with the v1.4 release). Website: [https://byeai.club](https://byeai.club)
 2.  The extension will start working immediately. No configuration is needed.
 3.  Visit the **Settings** page to customize which categories of content are hidden or to opt-in to anonymous analytics.
 
