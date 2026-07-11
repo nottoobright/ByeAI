@@ -184,6 +184,7 @@ function broadcast(msg, tabId = null) {
 ensureId();
 ensureDefaults();
 buildMenus();
+chrome.action.setBadgeBackgroundColor({ color: '#dc3545' });
 
 chrome.runtime.onInstalled.addListener(() => {
   buildMenus();
@@ -259,6 +260,13 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       await chrome.storage.local.set({ [blockedKey]: [] });
       broadcast({ type: 'cleared' });
       break;
+    case 'updateBadge': {
+      const tabId = sender.tab?.id;
+      if (tabId) {
+        chrome.action.setBadgeText({ tabId, text: msg.count > 0 ? String(msg.count) : '' });
+      }
+      break;
+    }
   }
 });
 

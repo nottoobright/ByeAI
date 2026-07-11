@@ -181,6 +181,20 @@ function remember(id, tile, bar = null) {
   if (!list.some(e => e.tile === tile)) list.push({ tile, bar });
 }
 
+let lastBadgeCount = -1;
+function reportBadge() {
+  let count = 0;
+  hiddenTiles.forEach(list => {
+    if (list.some(({ tile }) => tile?.isConnected && tile.style.display === 'none')) count++;
+  });
+  count += [...document.querySelectorAll('[data-byeai-channel-hidden]')]
+    .filter(t => t.isConnected && t.style.display === 'none').length;
+  if (count !== lastBadgeCount) {
+    lastBadgeCount = count;
+    try { chrome.runtime.sendMessage({ type: 'updateBadge', count }); } catch {}
+  }
+}
+
 function getCurrentVideoId() {
   if (location.pathname === '/watch') {
     return new URLSearchParams(window.location.search).get('v');
@@ -408,6 +422,8 @@ function scanAllTiles() {
     const t = bar.nextElementSibling;
     if (!t || !t.matches(TILE_SELECTOR) || t.style.display !== 'none') bar.remove();
   });
+
+  reportBadge();
 }
 
 function injectInlineButton() {
