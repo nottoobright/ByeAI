@@ -77,12 +77,14 @@ async function sendVote(id, cat, viewCount = 0, flagSource = 'unknown') {
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(10000)
     });
-    
-    if (!response.ok) {
-      console.warn('ByeAI: Vote submission failed:', response.status);
-    }
+
+    if (response.ok) return await response.json();
+    if (response.status === 409) return { alreadyVoted: true };
+    console.warn('ByeAI: Vote submission failed:', response.status);
+    return null;
   } catch (error) {
     console.warn('ByeAI: Vote submission error:', error);
+    return null;
   }
 }
 
@@ -131,7 +133,8 @@ async function removeBlock(id) {
 }
 
 function todayKey() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // recordHide() counts only user-initiated hides (their own flag actions).
@@ -187,53 +190,44 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup?.addListener(buildMenus);
 
-chrome.contextMenus.onClicked.addListener(async info => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!info.menuItemId.startsWith('cat_')) return;
   const cat = info.menuItemId.slice(4);
   const id = getVid(info.linkUrl) || getVid(info.srcUrl) || getVid(info.pageUrl);
   if (!id) return;
 
   const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
-  const tasks = [sendVote(id, cat, 0, 'context_menu')];
+  const serverResponse = await sendVote(id, cat, 0, 'context_menu');
   if (!flagOnly) {
-    tasks.push(storeBlock(id));
-    tasks.push(recordHide([cat]));
+    await storeBlock(id);
+    if (!serverResponse?.alreadyVoted) await recordHide([cat]);
   }
-  await Promise.all(tasks);
 
-  broadcast({ type: 'videoFlagged', id, category: cat, showUndo: !flagOnly, shadowMode: flagOnly });
+  broadcast({
+    type: 'videoFlagged', id, category: cat, showUndo: !flagOnly, shadowMode: flagOnly,
+    serverResponse: serverResponse?.alreadyVoted ? null : serverResponse,
+    alreadyVoted: !!serverResponse?.alreadyVoted
+  }, tab?.id);
 });
 
 
 chrome.runtime.onMessage.addListener(async (msg, sender) => {
   switch (msg.type) {
-    case 'flag': {
-      const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
-      const serverResponse = await sendVote(msg.id, msg.cat, msg.viewCount, msg.flagSource);
-      if (!flagOnly) {
-        await storeBlock(msg.id);
-        await recordHide([msg.cat]);
-      }
-      broadcast({
-        type: 'videoFlagged',
-        id: msg.id,
-        category: msg.cat,
-        showUndo: !flagOnly,
-        shadowMode: flagOnly,
-        serverResponse
-      }, sender.tab?.id);
-      break;
-    }
     case 'flagMultiple': {
       const { [flagOnlyKey]: flagOnly = false } = await chrome.storage.local.get(flagOnlyKey);
       const categories = msg.categories || [];
       const flagSource = msg.flagSource || 'popup';
+      let serverResponse = null;
+      let dupCount = 0;
       for (const cat of categories) {
-        await sendVote(msg.id, cat, msg.viewCount || 0, flagSource);
+        const resp = await sendVote(msg.id, cat, msg.viewCount || 0, flagSource);
+        if (resp?.alreadyVoted) dupCount++;
+        else if (resp && !serverResponse) serverResponse = resp;
       }
+      const alreadyVoted = categories.length > 0 && dupCount === categories.length;
       if (!flagOnly) {
         await storeBlock(msg.id);
-        await recordHide(categories);
+        if (!alreadyVoted) await recordHide(categories);
       }
       const targetTabId = sender.tab?.id || msg.tabId;
       broadcast({
@@ -241,7 +235,9 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
         id: msg.id,
         categories,
         showUndo: !flagOnly,
-        shadowMode: flagOnly
+        shadowMode: flagOnly,
+        serverResponse,
+        alreadyVoted
       }, targetTabId);
       break;
     }

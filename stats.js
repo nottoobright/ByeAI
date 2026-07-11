@@ -1,13 +1,17 @@
 const catLabels = Object.fromEntries(BYEAI.CATS.map(c => [c.id, c.label]));
 catLabels.local = 'Manual';
 
+function dayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function lastNDays(n) {
   const out = [];
   const today = new Date();
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    out.push(d.toISOString().slice(0, 10));
+    out.push(dayKey(d));
   }
   return out;
 }
