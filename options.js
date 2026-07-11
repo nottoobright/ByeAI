@@ -4,11 +4,14 @@ const analyticsKey = 'analytics';
 const flagOnlyKey = 'flagOnly';
 const hideChannelsKey = 'hideFlaggedChannels';
 const blockedKey = 'blockedIds';
+const placeholdersKey = 'showPlaceholders';
+const whitelistKey = 'whitelist';
 
 const catsDiv = document.getElementById('cats');
 const analyticsBox = document.getElementById('analytics');
 const flagOnlyBox = document.getElementById('flagOnly');
 const hideChannelsBox = document.getElementById('hideChannels');
+const placeholdersBox = document.getElementById('showPlaceholders');
 const exportBtn = document.getElementById('export');
 const importBtn = document.getElementById('import');
 const importFile = document.getElementById('importFile');
@@ -22,7 +25,7 @@ exportBtn.textContent = 'Export blocked list';
 importBtn.textContent = 'Import blocked list';
 
 async function load() {
-  const store = await chrome.storage.local.get([scopeKey, analyticsKey, flagOnlyKey, hideChannelsKey]);
+  const store = await chrome.storage.local.get([scopeKey, analyticsKey, flagOnlyKey, hideChannelsKey, placeholdersKey]);
   const active = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
   
   catsDiv.innerHTML = '';
@@ -64,6 +67,8 @@ async function load() {
   analyticsBox.checked = !!store[analyticsKey];
   flagOnlyBox.checked = !!store[flagOnlyKey];
   hideChannelsBox.checked = store[hideChannelsKey] !== false;  // default ON
+  placeholdersBox.checked = store[placeholdersKey] !== false;  // default ON
+  renderWhitelist();
   addCategoryControls();
 }
 
@@ -149,16 +154,54 @@ hideChannelsBox.onchange = async () => {
   showFeedback(`Channel hiding ${hideChannelsBox.checked ? 'enabled' : 'disabled'}`);
 };
 
+placeholdersBox.onchange = async () => {
+  await chrome.storage.local.set({ [placeholdersKey]: placeholdersBox.checked });
+  showFeedback(`Placeholders ${placeholdersBox.checked ? 'enabled' : 'disabled'}`);
+};
+
+async function renderWhitelist() {
+  const { [whitelistKey]: wl = { videos: [], channels: [] } } = await chrome.storage.local.get(whitelistKey);
+  const container = document.getElementById('whitelist');
+  container.innerHTML = '';
+
+  const addRow = (kind, value) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin:4px 0;font-size:13px';
+    const span = document.createElement('span');
+    span.textContent = `${kind === 'videos' ? 'Video' : 'Channel'}: ${value}`;
+    const btn = document.createElement('button');
+    btn.textContent = 'Remove';
+    btn.className = 'btn';
+    btn.style.cssText = 'font-size:11px;padding:2px 8px';
+    btn.onclick = async () => {
+      const { [whitelistKey]: cur = { videos: [], channels: [] } } = await chrome.storage.local.get(whitelistKey);
+      cur[kind] = cur[kind].filter(v => v !== value);
+      await chrome.storage.local.set({ [whitelistKey]: cur });
+      renderWhitelist();
+    };
+    row.append(span, btn);
+    container.appendChild(row);
+  };
+
+  wl.videos.forEach(v => addRow('videos', v));
+  wl.channels.forEach(c => addRow('channels', c));
+  if (!wl.videos.length && !wl.channels.length) {
+    container.textContent = 'Nothing whitelisted yet. Use "Always" on a hidden-video bar on YouTube.';
+  }
+}
+
 exportBtn.onclick = async () => {
   try {
     const { blockedIds = [] } = await chrome.storage.local.get(blockedKey);
     const { banCategories } = await chrome.storage.local.get(scopeKey);
+    const { [whitelistKey]: whitelist = { videos: [], channels: [] } } = await chrome.storage.local.get(whitelistKey);
 
     const exportData = {
       blockedIds,
       banCategories,
+      whitelist,
       exportDate: new Date().toISOString(),
-      version: '1.4'
+      version: chrome.runtime.getManifest().version
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -197,7 +240,11 @@ importFile.onchange = async () => {
     if (data.banCategories && typeof data.banCategories === 'object') {
       updates[scopeKey] = data.banCategories;
     }
-    
+
+    if (data.whitelist && Array.isArray(data.whitelist.videos) && Array.isArray(data.whitelist.channels)) {
+      updates[whitelistKey] = data.whitelist;
+    }
+
     if (Object.keys(updates).length > 0) {
       await chrome.storage.local.set(updates);
       showFeedback(`Import successful: ${Object.keys(updates).length} settings updated`);

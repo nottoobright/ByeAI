@@ -11,6 +11,9 @@ const knownChannels = new Map();  // channelId -> { flagged: bool, category: str
 let banCategories = {};
 let hideFlaggedChannels = true;
 let currentVideoId = null;
+let whitelist = { videos: [], channels: [] };
+let showPlaceholders = true;
+const sessionRevealed = new Set();  // ids revealed via a placeholder's [Show]
 
 const getVid = url => {
   try {
@@ -108,15 +111,74 @@ function extractTileChannelId(tile) {
   // Note: @handle links don't give us a UC ID; we accept those won't match.
 }
 
-function shouldHideVideo(videoData) {
+function shouldHideVideo(id) {
+  const videoData = known.get(id);
   if (!videoData || !videoData.flagged) return false;
-  if (videoData.category === 'local') return true;
+  if (videoData.category === 'local') return true;           // own flags always hide
+  if (sessionRevealed.has(id) || whitelist.videos.includes(id)) return false;
   return banCategories[videoData.category] === true;
 }
 
-function remember(id, tile) {
+const labelFor = catId => (cats.find(c => c.id === catId)?.label) || catId;
+
+async function addToWhitelist(kind, value) {
+  // Writes from the in-memory copy (kept current by the storage.onChanged listener);
+  // cross-context writes (e.g. options-page Remove) can still race in rare cases — accepted.
+  if (!whitelist[kind].includes(value)) {
+    whitelist[kind].push(value);
+    await chrome.storage.local.set({ whitelist });
+  }
+}
+
+function makePlaceholder(tile, { label, onShow, onAlways }) {
+  const bar = document.createElement('div');
+  bar.className = 'byeai-placeholder';
+  Object.assign(bar.style, {
+    display: 'flex', alignItems: 'center', gap: '8px',
+    padding: '8px 12px', margin: '4px 0', borderRadius: '8px',
+    background: 'rgba(128,128,128,0.15)', color: 'inherit',
+    fontSize: '12px', fontFamily: 'Roboto, Arial, sans-serif'
+  });
+
+  const text = document.createElement('span');
+  text.textContent = `🚩 Hidden by ByeAI · ${label}`;
+  text.style.flex = '1';
+
+  const mkBtn = t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = t;
+    Object.assign(b.style, {
+      border: 'none', borderRadius: '6px', padding: '4px 8px',
+      cursor: 'pointer', background: 'rgba(128,128,128,0.25)',
+      color: 'inherit', fontSize: '11px'
+    });
+    return b;
+  };
+
+  const reveal = () => {
+    show(tile);
+    delete tile.dataset.byeaiHidden;
+    delete tile.dataset.byeaiChannelHidden;
+    bar.remove();
+  };
+
+  const showBtn = mkBtn('Show');
+  showBtn.title = 'Show this time only';
+  showBtn.onclick = () => { onShow?.(); reveal(); };
+
+  const alwaysBtn = mkBtn('Always');
+  alwaysBtn.title = 'Always show (adds to your whitelist)';
+  alwaysBtn.onclick = () => { onAlways?.(); onShow?.(); reveal(); };
+
+  bar.append(text, showBtn, alwaysBtn);
+  return bar;
+}
+
+function remember(id, tile, bar = null) {
   if (!hiddenTiles.has(id)) hiddenTiles.set(id, []);
-  if (!hiddenTiles.get(id).includes(tile)) hiddenTiles.get(id).push(tile);
+  const list = hiddenTiles.get(id);
+  if (!list.some(e => e.tile === tile)) list.push({ tile, bar });
 }
 
 function getCurrentVideoId() {
@@ -128,14 +190,26 @@ function getCurrentVideoId() {
 }
 
 function hideTile(tile, id) {
-  if (tile && tile.style.display !== 'none') {
-    hide(tile);
-    remember(id, tile);
+  if (!tile || tile.dataset.byeaiHidden || tile.dataset.byeaiChannelHidden) return;
+  hide(tile);
+  tile.dataset.byeaiHidden = '1';
+
+  const meta = known.get(id);
+  let bar = null;
+  if (showPlaceholders && meta && meta.category && meta.category !== 'local' &&
+      !tile.previousElementSibling?.classList?.contains('byeai-placeholder')) {
+    bar = makePlaceholder(tile, {
+      label: labelFor(meta.category),
+      onShow: () => sessionRevealed.add(id),
+      onAlways: () => addToWhitelist('videos', id)
+    });
+    tile.parentNode?.insertBefore(bar, tile);
   }
+  remember(id, tile, bar);
 }
 
 function hideVideo(id) {
-  if (!shouldHideVideo(known.get(id))) return;
+  if (!shouldHideVideo(id)) return;
 
   const videoAnchors = anchorsById.get(id) || [];
   videoAnchors.forEach(a => {
@@ -164,7 +238,7 @@ function processSidebarVideos() {
       anchorsById.get(id).push(anchor);
     }
 
-    if (shouldHideVideo(known.get(id))) {
+    if (shouldHideVideo(id)) {
       hideTile(tile, id);
     }
   });
@@ -179,7 +253,13 @@ function applyFlag(id, category = 'local') {
 
 function applyUnflag(id) {
   known.set(id, { flagged: false });
-  (hiddenTiles.get(id) || []).forEach(show);
+  (hiddenTiles.get(id) || []).forEach(({ tile, bar }) => {
+    show(tile);
+    if (tile) {
+      delete tile.dataset.byeaiHidden;
+    }
+    bar?.remove();
+  });
   hiddenTiles.delete(id);
   processSidebarVideos();
 }
@@ -259,15 +339,29 @@ async function fetchChannelFlags(channelIds) {
 
 function shouldHideChannel(channelId) {
   if (!hideFlaggedChannels) return false;
-  const data = knownChannels.get(channelId);
-  return !!data?.flagged;
+  if (sessionRevealed.has(channelId) || whitelist.channels.includes(channelId)) return false;
+  return !!knownChannels.get(channelId)?.flagged;
+}
+
+function hideChannelTile(tile, cid, category) {
+  if (!tile || tile.dataset.byeaiChannelHidden || tile.dataset.byeaiHidden) return;
+  hide(tile);
+  tile.dataset.byeaiChannelHidden = '1';
+  if (showPlaceholders && !tile.previousElementSibling?.classList?.contains('byeai-placeholder')) {
+    const bar = makePlaceholder(tile, {
+      label: `Channel flagged · ${labelFor(category)}`,
+      onShow: () => sessionRevealed.add(cid),
+      onAlways: () => addToWhitelist('channels', cid)
+    });
+    tile.parentNode?.insertBefore(bar, tile);
+  }
 }
 
 function hideTilesForFlaggedChannels() {
   document.querySelectorAll(TILE_SELECTOR).forEach(tile => {
     const cid = extractTileChannelId(tile);
     if (cid && shouldHideChannel(cid)) {
-      hide(tile);
+      hideChannelTile(tile, cid, knownChannels.get(cid)?.category || 'other');
     }
   });
 }
@@ -308,6 +402,12 @@ function scanAllTiles() {
       hideTilesForFlaggedChannels();
     }
   }
+
+  // Remove placeholder bars whose tile was removed or re-shown by YouTube's re-renders
+  document.querySelectorAll('.byeai-placeholder').forEach(bar => {
+    const t = bar.nextElementSibling;
+    if (!t || !t.matches(TILE_SELECTOR) || t.style.display !== 'none') bar.remove();
+  });
 }
 
 function injectInlineButton() {
@@ -689,9 +789,11 @@ chrome.runtime.onMessage.addListener(m => {
   if (m.type === 'cleared') location.reload();
 });
 
-chrome.storage.local.get([blockedKey, scopeKey, 'hideFlaggedChannels']).then(store => {
+chrome.storage.local.get([blockedKey, scopeKey, 'hideFlaggedChannels', 'whitelist', 'showPlaceholders']).then(store => {
   banCategories = store[scopeKey] ?? cats.reduce((o, c) => ({ ...o, [c.id]: true }), {});
   hideFlaggedChannels = store.hideFlaggedChannels !== false;  // default ON
+  whitelist = store.whitelist || { videos: [], channels: [] };
+  showPlaceholders = store.showPlaceholders !== false;        // default ON
   (store[blockedKey] || []).forEach(id => known.set(id, { flagged: true, category: 'local' }));
   initialize();
 });
@@ -725,6 +827,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
     hideFlaggedChannels = changes.hideFlaggedChannels.newValue !== false;
     if (hideFlaggedChannels) hideTilesForFlaggedChannels();
     else location.reload();  // simplest way to undo channel-based hiding
+  }
+  if (changes.whitelist) {
+    whitelist = changes.whitelist.newValue || { videos: [], channels: [] };
+  }
+  if (changes.showPlaceholders) {
+    showPlaceholders = changes.showPlaceholders.newValue !== false;
+    if (!showPlaceholders) document.querySelectorAll('.byeai-placeholder').forEach(b => b.remove());
   }
 });
 
