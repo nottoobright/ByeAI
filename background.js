@@ -13,7 +13,9 @@ const cats = BYEAI.CATS;
 const getVid = url => {
   try {
     const u = new URL(url);
-    return u.pathname === '/watch' ? u.searchParams.get('v') : null;
+    if (u.pathname === '/watch') return u.searchParams.get('v');
+    const m = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
+    return m ? m[1] : null;
   } catch { return null; }
 };
 

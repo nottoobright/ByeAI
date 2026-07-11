@@ -74,11 +74,12 @@ function createCategoryItem(cat) {
 
 chrome.tabs.query({ active: true, currentWindow: true }, async ([tab]) => {
   const u = new URL(tab.url);
-  const isWatch = u.pathname === '/watch';
+  const shortsMatch = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
+  const isWatch = u.pathname === '/watch' || !!shortsMatch;
   flagUI.hidden = !isWatch;
-  
+
   if (isWatch) {
-    currentVideoId = u.searchParams.get('v');
+    currentVideoId = shortsMatch ? shortsMatch[1] : u.searchParams.get('v');
     currentTabId = tab.id;
     
     catsDiv.innerHTML = '';
