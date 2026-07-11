@@ -648,9 +648,10 @@ chrome.runtime.onMessage.addListener(m => {
     let baseMsg;
     if (m.shadowMode) {
       baseMsg = 'Flag submitted (not hiding)';
+    } else if (m.alreadyVoted) {
+      baseMsg = 'You already flagged this video.';
     } else if (m.serverResponse) {
-      const source = m.serverResponse.view_count_source === 'api' ? 'API' : 'page';
-      baseMsg = `Video flagged! Score: ${m.serverResponse.new_score.toFixed(1)}/${m.serverResponse.threshold} (views via ${source})`;
+      baseMsg = `Video flagged! Score: ${m.serverResponse.new_score.toFixed(1)}/${m.serverResponse.threshold}`;
     } else {
       baseMsg = 'Video hidden.';
     }
@@ -662,9 +663,9 @@ chrome.runtime.onMessage.addListener(m => {
     }
   }
   
-  if (m.type === 'videoUnblocked') { 
-    applyUnflag(m.id); 
-    toastMsg('Video restored.', () => {}); 
+  if (m.type === 'videoUnblocked') {
+    applyUnflag(m.id);
+    toastMsg('Video restored.', null);
   }
   
   if (m.type === 'cleared') location.reload();
