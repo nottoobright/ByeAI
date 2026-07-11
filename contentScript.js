@@ -122,10 +122,11 @@ function shouldHideVideo(id) {
 const labelFor = catId => (cats.find(c => c.id === catId)?.label) || catId;
 
 async function addToWhitelist(kind, value) {
-  const { whitelist: wl = { videos: [], channels: [] } } = await chrome.storage.local.get('whitelist');
-  if (!wl[kind].includes(value)) {
-    wl[kind].push(value);
-    await chrome.storage.local.set({ whitelist: wl });
+  // Writes from the in-memory copy (kept current by the storage.onChanged listener);
+  // cross-context writes (e.g. options-page Remove) can still race in rare cases — accepted.
+  if (!whitelist[kind].includes(value)) {
+    whitelist[kind].push(value);
+    await chrome.storage.local.set({ whitelist });
   }
 }
 
@@ -145,6 +146,7 @@ function makePlaceholder(tile, { label, onShow, onAlways }) {
 
   const mkBtn = t => {
     const b = document.createElement('button');
+    b.type = 'button';
     b.textContent = t;
     Object.assign(b.style, {
       border: 'none', borderRadius: '6px', padding: '4px 8px',
@@ -188,13 +190,14 @@ function getCurrentVideoId() {
 }
 
 function hideTile(tile, id) {
-  if (!tile || tile.dataset.byeaiHidden) return;
+  if (!tile || tile.dataset.byeaiHidden || tile.dataset.byeaiChannelHidden) return;
   hide(tile);
   tile.dataset.byeaiHidden = '1';
 
   const meta = known.get(id);
   let bar = null;
-  if (showPlaceholders && meta && meta.category && meta.category !== 'local') {
+  if (showPlaceholders && meta && meta.category && meta.category !== 'local' &&
+      !tile.previousElementSibling?.classList?.contains('byeai-placeholder')) {
     bar = makePlaceholder(tile, {
       label: labelFor(meta.category),
       onShow: () => sessionRevealed.add(id),
@@ -344,7 +347,7 @@ function hideChannelTile(tile, cid, category) {
   if (!tile || tile.dataset.byeaiChannelHidden || tile.dataset.byeaiHidden) return;
   hide(tile);
   tile.dataset.byeaiChannelHidden = '1';
-  if (showPlaceholders) {
+  if (showPlaceholders && !tile.previousElementSibling?.classList?.contains('byeai-placeholder')) {
     const bar = makePlaceholder(tile, {
       label: `Channel flagged · ${labelFor(category)}`,
       onShow: () => sessionRevealed.add(cid),
@@ -399,6 +402,12 @@ function scanAllTiles() {
       hideTilesForFlaggedChannels();
     }
   }
+
+  // Remove placeholder bars whose tile was removed or re-shown by YouTube's re-renders
+  document.querySelectorAll('.byeai-placeholder').forEach(bar => {
+    const t = bar.nextElementSibling;
+    if (!t || !t.matches(TILE_SELECTOR) || t.style.display !== 'none') bar.remove();
+  });
 }
 
 function injectInlineButton() {
