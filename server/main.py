@@ -496,7 +496,7 @@ def get_flags(request: Request, ids: str, db: Session = Depends(database.get_db)
                 models.Vote.video_id == video.video_id
             ).group_by(models.Vote.category).order_by(func.count(models.Vote.category).desc()).all()
             
-            most_common_category = category_counts[0][0] if category_counts else "Other"
+            most_common_category = category_counts[0][0] if category_counts else "other"
             
             flagged_videos.append({
                 "id": video.video_id,
