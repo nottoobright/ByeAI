@@ -1,12 +1,4 @@
-const cats = [
-  { id: 'ai-general', label: 'AI-General' },
-  { id: 'ai-script', label: 'AI-Script' },
-  { id: 'ai-thumbnail', label: 'AI-Image/Thumbnail' },
-  { id: 'ai-music', label: 'AI-Music' },
-  { id: 'ai-voice', label: 'AI-Voice-over' },
-  { id: 'deepfake', label: 'Deepfake/Video' },
-  { id: 'other', label: 'Other' }
-];
+const cats = BYEAI.CATS;
 const scopeKey = 'banCategories';
 const analyticsKey = 'analytics';
 const flagOnlyKey = 'flagOnly';
@@ -161,21 +153,23 @@ exportBtn.onclick = async () => {
   try {
     const { blockedIds = [] } = await chrome.storage.local.get(blockedKey);
     const { banCategories } = await chrome.storage.local.get(scopeKey);
-    
+
     const exportData = {
       blockedIds,
       banCategories,
       exportDate: new Date().toISOString(),
-      version: '0.6.0'
+      version: '1.4'
     };
-    
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    chrome.downloads.download({
-      url,
-      filename: `byeai_export_${new Date().toISOString().split('T')[0]}.json`,
-      saveAs: true
-    });
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `byeai_export_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     showFeedback('Export started');
   } catch (error) {
     showFeedback('Export failed');
