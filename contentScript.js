@@ -15,9 +15,21 @@ let currentVideoId = null;
 const getVid = url => {
   try {
     const u = new URL(url, location.href);
-    return u.pathname === '/watch' ? u.searchParams.get('v') : null;
+    if (u.pathname === '/watch') return u.searchParams.get('v');
+    const m = u.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
+    return m ? m[1] : null;
   } catch { return null; }
 };
+
+const TILE_SELECTOR = [
+  'ytd-rich-item-renderer',
+  'ytd-video-renderer',
+  'ytd-grid-video-renderer',
+  'ytd-compact-video-renderer',
+  'ytd-reel-item-renderer',
+  'yt-lockup-view-model',
+  'ytm-shorts-lockup-view-model'
+].join(', ');
 
 const hide = t => t && (t.style.display = 'none');
 const show = t => t && (t.style.display = '');
@@ -108,9 +120,11 @@ function remember(id, tile) {
 }
 
 function getCurrentVideoId() {
-  if (location.pathname !== '/watch') return null;
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('v');
+  if (location.pathname === '/watch') {
+    return new URLSearchParams(window.location.search).get('v');
+  }
+  const m = location.pathname.match(/^\/shorts\/([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
 }
 
 function hideTile(tile, id) {
@@ -125,7 +139,7 @@ function hideVideo(id) {
 
   const videoAnchors = anchorsById.get(id) || [];
   videoAnchors.forEach(a => {
-    const tile = a.closest('ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer');
+    const tile = a.closest(TILE_SELECTOR);
     if (tile) {
       hideTile(tile, id);
     }
@@ -138,8 +152,8 @@ function processSidebarVideos() {
   const sidebar = document.querySelector('#secondary');
   if (!sidebar) return;
 
-  sidebar.querySelectorAll('ytd-compact-video-renderer').forEach(tile => {
-    const anchor = tile.querySelector('a.yt-simple-endpoint');
+  sidebar.querySelectorAll('ytd-compact-video-renderer, yt-lockup-view-model').forEach(tile => {
+    const anchor = tile.querySelector('a.yt-simple-endpoint, a[href*="/watch?v="], a[href^="/shorts/"]');
     if (!anchor) return;
 
     const id = getVid(anchor.href);
@@ -160,6 +174,7 @@ function applyFlag(id, category = 'local') {
   known.set(id, { flagged: true, category });
   hideVideo(id);
   processSidebarVideos();
+  if (id === getCurrentVideoId()) injectInlineButton();
 }
 
 function applyUnflag(id) {
@@ -249,7 +264,7 @@ function shouldHideChannel(channelId) {
 }
 
 function hideTilesForFlaggedChannels() {
-  document.querySelectorAll('ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer').forEach(tile => {
+  document.querySelectorAll(TILE_SELECTOR).forEach(tile => {
     const cid = extractTileChannelId(tile);
     if (cid && shouldHideChannel(cid)) {
       hide(tile);
@@ -272,15 +287,18 @@ function processAnchor(a) {
 }
 
 function scanAllTiles() {
-  document.querySelectorAll('a#video-title-link, a.yt-simple-endpoint').forEach(processAnchor);
+  document.querySelectorAll('a#video-title-link, a.yt-simple-endpoint, a[href^="/shorts/"], a[href*="youtube.com/shorts/"]').forEach(processAnchor);
   processSidebarVideos();
+
+  const currentId = getCurrentVideoId();
+  if (currentId && !known.has(currentId)) known.set(currentId, { flagged: null });
 
   const unknown = [...known.entries()].filter(([, v]) => v.flagged === null).map(([k]) => k);
   if (unknown.length > 0) fetchFlags(unknown);
 
   if (hideFlaggedChannels) {
     const cids = new Set();
-    document.querySelectorAll('ytd-rich-item-renderer, ytd-video-renderer, ytd-grid-video-renderer, ytd-compact-video-renderer').forEach(tile => {
+    document.querySelectorAll(TILE_SELECTOR).forEach(tile => {
       const cid = extractTileChannelId(tile);
       if (cid) cids.add(cid);
     });
