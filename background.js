@@ -1,3 +1,5 @@
+import './constants.js';
+
 const idKey = 'clientHash';
 const blockedKey = 'blockedIds';
 const scopeKey = 'banCategories';
@@ -5,17 +7,8 @@ const analyticsKey = 'analytics';
 const flagOnlyKey = 'flagOnly';
 const statsKey = 'stats';
 const STATS_DAY_CAP = 90;
-const api = 'https://api.byeai.tech'; // Use this in production
-//const api = 'http://localhost:8000' // Use this for local testing
-const cats = [
-  { id: 'ai-general', label: 'AI-General' },
-  { id: 'ai-script', label: 'AI-Script' },
-  { id: 'ai-thumbnail', label: 'AI-Thumbnail' },
-  { id: 'ai-music', label: 'AI-Music' },
-  { id: 'ai-voice', label: 'AI-Voice' },
-  { id: 'deepfake', label: 'Deepfake' },
-  { id: 'other', label: 'Other' }
-];
+const api = BYEAI.API;
+const cats = BYEAI.CATS;
 
 const getVid = url => {
   try {

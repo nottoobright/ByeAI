@@ -1,13 +1,5 @@
-const cats = {
-  'ai-general': 'AI-General',
-  'ai-script': 'AI-Script',
-  'ai-thumbnail': 'AI-Thumbnail',
-  'ai-music': 'AI-Music',
-  'ai-voice': 'AI-Voice',
-  'deepfake': 'Deepfake',
-  'other': 'Other',
-  'local': 'Manual',
-};
+const catLabels = Object.fromEntries(BYEAI.CATS.map(c => [c.id, c.label]));
+catLabels.local = 'Manual';
 
 function lastNDays(n) {
   const out = [];
@@ -60,7 +52,7 @@ async function render() {
       const row = document.createElement('div');
       row.className = 'cat-row';
       const left = document.createElement('span');
-      left.textContent = cats[id] || id;
+      left.textContent = catLabels[id] || id;
       const right = document.createElement('span');
       right.textContent = count.toLocaleString();
       row.appendChild(left);
