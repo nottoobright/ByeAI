@@ -38,10 +38,10 @@ We are committed to protecting your information and use standard security measur
 
 We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new policy on this page.
 
+### Data Retention
+
+Votes, video scores, and anonymous reputation data are retained indefinitely while the service operates — they form the community consensus dataset. The anonymous client identifier (a random UUID) exists only in your browser and can be reset at any time by clearing the extension's storage or reinstalling it. Standard web-server access logs (which include IP addresses) are rotated and deleted within 14 days. If the ByeAI service shuts down, the entire server database will be deleted within 30 days.
+
 ### Contact Us
 
 If you have any questions about this Privacy Policy, please contact us at: **support@byeai.club**
-
-## Data Retention
-
-Votes, video scores, and anonymous reputation data are retained indefinitely while the service operates — they form the community consensus dataset. The anonymous client identifier (a random UUID) exists only in your browser and can be reset at any time by clearing the extension's storage or reinstalling it. Standard web-server access logs (which include IP addresses) are rotated and deleted within 14 days. If the ByeAI service shuts down, the entire server database will be deleted within 30 days.

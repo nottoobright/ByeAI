@@ -19,9 +19,6 @@ Thumbs.db
 #Mics
 PID.txt
 overview_arch.txt
-.github
-.gitignore
-*.zip
 *.zip
 
 # Private/sensitive documents - NEVER COMMIT
