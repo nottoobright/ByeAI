@@ -184,6 +184,16 @@ function broadcast(msg, tabId = null) {
 ensureId();
 ensureDefaults();
 buildMenus();
+chrome.action.setBadgeBackgroundColor({ color: '#dc3545' });
+
+// Clear the badge when a tab starts a full-page navigation; if the destination
+// is YouTube, the content script re-reports the count after its first scan.
+// (Reading the destination URL would need the "tabs" permission — this avoids it.)
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status === 'loading') {
+    chrome.action.setBadgeText({ tabId, text: '' });
+  }
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   buildMenus();
@@ -259,6 +269,13 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       await chrome.storage.local.set({ [blockedKey]: [] });
       broadcast({ type: 'cleared' });
       break;
+    case 'updateBadge': {
+      const tabId = sender.tab?.id;
+      if (tabId) {
+        chrome.action.setBadgeText({ tabId, text: msg.count > 0 ? String(msg.count) : '' });
+      }
+      break;
+    }
   }
 });
 
