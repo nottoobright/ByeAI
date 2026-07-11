@@ -84,8 +84,16 @@ VALID_CATEGORIES = [
 ]
 VALID_FLAG_SOURCES = ['inline_button', 'context_menu', 'popup', 'thumbnail', 'unknown']
 
+def _env_int(name: str, default: int) -> int:
+    """Parse an int env var, falling back to the default on missing/malformed values."""
+    try:
+        return int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid {name} env value; using default {default}")
+        return default
+
 def get_channel_flag_threshold() -> int:
-    return int(os.getenv("CHANNEL_FLAG_THRESHOLD", "10"))
+    return _env_int("CHANNEL_FLAG_THRESHOLD", 10)
 
 class VoteRequest(BaseModel):
     videoId: str
@@ -259,7 +267,7 @@ def get_user_reputation_score(rep_points: int) -> float:
     return 1 + math.log2(max(1, rep_points))
 
 def calculate_threshold(view_count: int) -> int:
-    floor = int(os.getenv("VIDEO_THRESHOLD_FLOOR", "15"))
+    floor = _env_int("VIDEO_THRESHOLD_FLOOR", 15)
     return max(floor, math.ceil(0.05 * math.sqrt(view_count)))
 
 def update_user_reputations_safe(video_id: str) -> None:

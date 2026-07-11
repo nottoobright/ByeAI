@@ -19,6 +19,16 @@ def test_video_threshold_env_floor(monkeypatch):
     assert main.calculate_threshold(10_000_000) == 159
 
 
+def test_video_threshold_malformed_env_falls_back(monkeypatch):
+    monkeypatch.setenv("VIDEO_THRESHOLD_FLOOR", "abc")
+    assert main.calculate_threshold(0) == 15
+
+
+def test_channel_threshold_malformed_env_falls_back(monkeypatch):
+    monkeypatch.setenv("CHANNEL_FLAG_THRESHOLD", "3.5")
+    assert main.get_channel_flag_threshold() == 10
+
+
 def test_channel_threshold_env(client, monkeypatch):
     monkeypatch.setenv("CHANNEL_FLAG_THRESHOLD", "2")
     for h in ("aaaaaaaa-1111-4111-8111-111111111111",
