@@ -169,42 +169,69 @@ function applyUnflag(id) {
   processSidebarVideos();
 }
 
+const FLAGS_BATCH_SIZE = 100;      // server rejects >100 ids per request
+let fetchBackoffUntil = 0;         // no API requests before this timestamp
+const inFlightVideos = new Set();
+const inFlightChannels = new Set();
+
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function noteFetchFailure(res) {
+  const retryAfter = parseInt(res?.headers?.get?.('Retry-After'), 10);
+  fetchBackoffUntil = Date.now() + (Number.isFinite(retryAfter) ? retryAfter * 1000 : 30_000);
+}
+
 async function fetchFlags(ids) {
-  if (!ids.length) return;
+  ids = ids.filter(id => !inFlightVideos.has(id));
+  if (!ids.length || Date.now() < fetchBackoffUntil) return;
+  ids.forEach(id => inFlightVideos.add(id));
   try {
-    const res = await fetch(`${api}/flags?ids=${ids.join(',')}`);
-    if (!res.ok) throw new Error('API request failed');
-    const remoteData = await res.json();
-    const flaggedMap = new Map((remoteData.videos || []).map(v => [v.id, v.category]));
-    ids.forEach(id => {
-      if (flaggedMap.has(id)) {
-        applyFlag(id, flaggedMap.get(id));
-      } else {
-        known.set(id, { flagged: false });
-      }
-    });
+    for (const batch of chunk(ids, FLAGS_BATCH_SIZE)) {
+      const res = await fetch(`${api}/flags?ids=${batch.join(',')}`);
+      if (!res.ok) { noteFetchFailure(res); return; }
+      const remoteData = await res.json();
+      const flaggedMap = new Map((remoteData.videos || []).map(v => [v.id, v.category]));
+      batch.forEach(id => {
+        if (flaggedMap.has(id)) {
+          applyFlag(id, flaggedMap.get(id));
+        } else {
+          known.set(id, { flagged: false });
+        }
+      });
+    }
   } catch {
-    ids.forEach(id => known.set(id, { flagged: false }));
+    noteFetchFailure(null);
+  } finally {
+    ids.forEach(id => inFlightVideos.delete(id));
   }
 }
 
 async function fetchChannelFlags(channelIds) {
-  const unknown = channelIds.filter(id => !knownChannels.has(id));
-  if (!unknown.length) return;
+  const unknown = channelIds.filter(id => !knownChannels.has(id) && !inFlightChannels.has(id));
+  if (!unknown.length || Date.now() < fetchBackoffUntil) return;
+  unknown.forEach(id => inFlightChannels.add(id));
   try {
-    const res = await fetch(`${api}/channels?ids=${unknown.join(',')}`);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const flagged = new Map((data.channels || []).map(c => [c.id, c.category]));
-    unknown.forEach(id => {
-      if (flagged.has(id)) {
-        knownChannels.set(id, { flagged: true, category: flagged.get(id) });
-      } else {
-        knownChannels.set(id, { flagged: false });
-      }
-    });
+    for (const batch of chunk(unknown, FLAGS_BATCH_SIZE)) {
+      const res = await fetch(`${api}/channels?ids=${batch.join(',')}`);
+      if (!res.ok) { noteFetchFailure(res); return; }
+      const data = await res.json();
+      const flagged = new Map((data.channels || []).map(c => [c.id, c.category]));
+      batch.forEach(id => {
+        if (flagged.has(id)) {
+          knownChannels.set(id, { flagged: true, category: flagged.get(id) });
+        } else {
+          knownChannels.set(id, { flagged: false });
+        }
+      });
+    }
   } catch {
-    unknown.forEach(id => knownChannels.set(id, { flagged: false }));
+    noteFetchFailure(null);
+  } finally {
+    unknown.forEach(id => inFlightChannels.delete(id));
   }
 }
 
