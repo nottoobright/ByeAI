@@ -190,7 +190,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup?.addListener(buildMenus);
 
-chrome.contextMenus.onClicked.addListener(async info => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!info.menuItemId.startsWith('cat_')) return;
   const cat = info.menuItemId.slice(4);
   const id = getVid(info.linkUrl) || getVid(info.srcUrl) || getVid(info.pageUrl);
@@ -200,14 +200,14 @@ chrome.contextMenus.onClicked.addListener(async info => {
   const serverResponse = await sendVote(id, cat, 0, 'context_menu');
   if (!flagOnly) {
     await storeBlock(id);
-    await recordHide([cat]);
+    if (!serverResponse?.alreadyVoted) await recordHide([cat]);
   }
 
   broadcast({
     type: 'videoFlagged', id, category: cat, showUndo: !flagOnly, shadowMode: flagOnly,
     serverResponse: serverResponse?.alreadyVoted ? null : serverResponse,
     alreadyVoted: !!serverResponse?.alreadyVoted
-  });
+  }, tab?.id);
 });
 
 
@@ -227,7 +227,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender) => {
       const alreadyVoted = categories.length > 0 && dupCount === categories.length;
       if (!flagOnly) {
         await storeBlock(msg.id);
-        await recordHide(categories);
+        if (!alreadyVoted) await recordHide(categories);
       }
       const targetTabId = sender.tab?.id || msg.tabId;
       broadcast({
