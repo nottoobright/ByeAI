@@ -28,8 +28,24 @@ logger = logging.getLogger(__name__)
 models.Base.metadata.create_all(bind=database.engine)
 
 def _rate_limit_key(request: Request) -> str:
-    """Default rate-limit key: caller IP. Per-clientHash limiting on /vote
-    is handled separately inside the handler (since it needs the parsed body)."""
+    """Default rate-limit key: the real caller IP. Per-clientHash limiting on
+    /vote is handled separately inside the handler (since it needs the parsed body).
+
+    Every request reaches us through Caddy, so request.client.host is always the
+    proxy's container IP -- keying on that put the entire user base into one
+    shared bucket and caused live 429s on /flags. Caddy appends the peer address
+    to X-Forwarded-For, so the RIGHTMOST entry is the address Caddy actually saw.
+    Reading the rightmost (not the leftmost) also makes the key unspoofable:
+    anything a client injects itself gets pushed left by that append.
+
+    Falls back to the peer address when the header is absent, so running without
+    a proxy in front behaves exactly as before.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[-1].strip()
+        if client_ip:
+            return client_ip
     return get_remote_address(request)
 
 
